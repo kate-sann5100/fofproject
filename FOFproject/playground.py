@@ -1,27 +1,52 @@
+import pandas as pd
 import plotly.graph_objects as go
 
-# Data for Asia and US/EU
-years = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
-asia_values = [100, 90, 80, 70, 60, 55, 50, 45, 40, 50]
-us_eu_values = [0, 10, 20, 30, 40, 45, 50, 55, 60, 50]
+# Load return data from Excel
+file_path = r"Z:\FOF Underlying Funds\RDGFF Fund Document\FOF Factsheet\RDGFF\2025\RETURN DATA.csv"
+df = pd.read_csv(file_path)
 
-# Create figure
-fig = go.Figure()
+from FundCharacteristics import Fund
+# Example usage:
+# Extract date and Tairen columns (assuming 'date' and 'TAIREN' are the column names)
+monthly_returns = []
 
-# Add Asia trace
-fig.add_trace(go.Scatter(x=years, y=asia_values, fill='tozeroy', name='Asia', line_color='gold'))
+for _, row in df.iterrows():
+    date = row['date']  
+    tairen_value = row['TAIREN'] 
+    # Convert percentage string to float
+    if pd.notnull(tairen_value):
+        value = float(str(tairen_value).replace('%', '')) / 100
+        monthly_returns.append({'date': date, 'value': value})
 
-# Add US/EU trace
-fig.add_trace(go.Scatter(x=years, y=us_eu_values, fill='tozeroy', name='US/EU', line_color='blue'))
+# Create Fund object for Tairen
+tairen_fund = Fund(monthly_returns, performance_fee=0.2, management_fee=0.01)
+result = tairen_fund.cumulative_return("2007-06", "2007-06")
+print(result)
 
-# Update layout
-fig.update_layout(
-    title='Asia vs US/EU Trend (2017-2026)',
-    xaxis_title='Year',
-    yaxis_title='Percentage',
-    yaxis_range=[0, 100],
-    template='plotly_dark'
-)
+print(tairen_fund.monthly_returns[:5])
 
-# Show plot
-fig.show()
+# # Extract data for plotting
+# years = df.iloc[:, 0].tolist()
+# asia_values = df.iloc[:, 1].tolist()
+# us_eu_values = df.iloc[:, 2].tolist()
+
+# # Create figure
+# fig = go.Figure()
+
+# # Add Asia trace
+# fig.add_trace(go.Scatter(x=years, y=asia_values, fill='tozeroy', name='Asia', line_color='gold'))
+
+# # Add US/EU trace
+# fig.add_trace(go.Scatter(x=years, y=us_eu_values, fill='tozeroy', name='US/EU', line_color='blue'))
+
+# # Update layout
+# fig.update_layout(
+#     title='Asia vs US/EU Trend (2017-2026)',
+#     xaxis_title='Year',
+#     yaxis_title='Percentage',
+#     yaxis_range=[0, 1],
+# #     template='plotly_white'
+# # )
+
+# # Show plot
+# fig.show()
