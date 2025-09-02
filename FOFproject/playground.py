@@ -26,9 +26,9 @@ result = tairen_fund.cumulative_return("2007-06", "2007-06")
 print(result)
 
 fig = plot_cumulative_returns(
-    start_month="2020-01",
-    end_month="2020-12",
-    asset_columns=["RDGFF", "S&P 500", "MSCI WORLD"],
+    start_month="2019-01",
+    end_month="2025-6",
+    asset_columns=["LIM", "EUREKAHEDGE", "MSCI WORLD"],
     df=df,
     style="default"
 )

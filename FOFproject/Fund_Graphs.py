@@ -30,7 +30,7 @@ def plot_cumulative_returns(start_month, end_month, asset_columns, df, style="de
 
     if style == "dark":
         palette = {"RDGFF": "#B58B80", "MSCI CHINA": "#DACEBF", "MSCI WORLD": "#C1AE94"}
-    elif style == "light":
+    elif style == "excel":
         palette = {"RDGFF": "#E0E0E0", "MSCI CHINA": "#A67C52", "MSCI WORLD": "#6A5ACD"}
 
     default_color = "#888888"
@@ -117,8 +117,8 @@ def plot_cumulative_returns(start_month, end_month, asset_columns, df, style="de
             showgrid=True,
             gridcolor="#E9E9E9",
             tickformat="%b %Y",
-            tickvals=list(months)[::max(1, len(months)//5)],
-            ticktext=[dt.strftime("%b %Y") for dt in list(months)[::max(1, len(months)//8)]],
+            tickvals=[dt for dt in list(months)[::max(1, len(months)//6)]],
+            ticktext=[dt.strftime("%b %Y") for dt in list(months)[::max(1, len(months)//6)]],
         ),
         yaxis=dict(title="Cumulative Return (%)", tickformat=".0%", zeroline=True),
         legend=dict(orientation="h", yanchor="bottom", y=-0.28, xanchor="left", x=0.0),
