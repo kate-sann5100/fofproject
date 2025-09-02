@@ -1,36 +1,46 @@
 import pandas as pd
 import plotly.graph_objects as go
 from Fund_Graphs import plot_cumulative_returns
-
+from Fund_Characteristics import Fund
 
 # Load return data from Excel
 file_path = r"Z:\FOF Underlying Funds\RDGFF Fund Document\FOF Factsheet\RDGFF\2025\RETURN DATA.csv"
 df = pd.read_csv(file_path)
 
-from Fund_Characteristics import Fund
-# Example usage:
-# Extract date and Tairen columns (assuming 'date' and 'TAIREN' are the column names)
-monthly_returns = []
+funds = {}
+for col in df.columns:
+    if col == "date":
+        continue  # skip the date column
 
-for _, row in df.iterrows():
-    date = row['date']  
-    tairen_value = row['TAIREN'] 
-    # Convert percentage string to float
-    if pd.notnull(tairen_value):
-        value = float(str(tairen_value).replace('%', '')) / 100
-        monthly_returns.append({'date': date, 'value': value})
 
-# Create Fund object for Tairen
-tairen_fund = Fund(monthly_returns, performance_fee=0.2, management_fee=0.01)
-result = tairen_fund.cumulative_return("2007-06", "2007-06")
-print(result)
+    returns = [
+        {"date": d, "value": v}
+        for d, v in zip(df["date"], df[col])
+        if pd.notna(v)
+    ]
 
-fig = plot_cumulative_returns(
-    start_month="2019-01",
-    end_month="2025-6",
-    asset_columns=["LIM", "EUREKAHEDGE", "MSCI WORLD"],
-    df=df,
-    style="default"
-)
+    # Create a Fund instance
+    funds[col] = Fund(
+        monthly_returns=returns,
+        performance_fee=0.2,
+        management_fee=0.01,
+    )
 
-print(tairen_fund.monthly_returns[:5])
+# Now you can access any fund by name:
+TAIREN_fund = funds["HAO"]
+# print(TAIREN_fund.monthly_returns)
+# print(TAIREN_fund.cumulative_return(start_month="2025-06", end_month="2025-7"))
+# print(TAIREN_fund.annualized_return(start_month=TAIREN_fund.inception_date, end_month=TAIREN_fund.latest_date))
+# print(TAIREN_fund.sharpe_ratio(start_month=TAIREN_fund.inception_date, end_month=TAIREN_fund.latest_date, risk_free_rate=0.0))
+# print(TAIREN_fund.volatility(start_month=TAIREN_fund.inception_date, end_month=TAIREN_fund.latest_date))
+print(TAIREN_fund.sortino_ratio(start_month=TAIREN_fund.inception_date, end_month=TAIREN_fund.latest_date))
+
+
+# # Plot cumulative returns
+# fig = plot_cumulative_returns(
+#     start_month="2019-01",
+#     end_month="2025-6",
+#     asset_columns=["LIM", "EUREKAHEDGE", "MSCI WORLD"],
+#     df=df,
+#     style="default"
+# )
