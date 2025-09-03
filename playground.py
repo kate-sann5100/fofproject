@@ -4,7 +4,7 @@ from src.fofproject.fund import Fund
 from src.fofproject.plot import plot_cumulative_returns
 
 # Load return data from Excel
-file_path = r"Z:\FOF Underlying Funds\RDGFF Fund Document\FOF Factsheet\RDGFF\2025\RETURN DATA.csv"
+file_path = r"RETURN DATA.csv"
 df = pd.read_csv(file_path)
 
 funds = {}
@@ -30,15 +30,12 @@ for col in df.columns:
 # print(funds['TAIREN'].total_cum_rtn)
 # print(funds['TAIREN'].total_ann_rtn)   
 # print(funds['TAIREN'].total_vol)
-print(funds['RDGFF'].return_in_negative_months(start_month=funds['RDGFF'].inception_date,end_month=funds['RDGFF'].latest_date))
+# print(funds['RDGFF'].return_in_negative_months(start_month=funds['RDGFF'].inception_date,end_month=funds['RDGFF'].latest_date))
 
-# keys = ['RDGFF', 'MSCI CHINA','MSCI WORLD','HAO','TAIREN']
-# funds_to_be_plot = {k: funds.get(k, None) for k in keys} # or a custom default
 
-# fig = plot_cumulative_returns(
-#     funds=funds_to_be_plot,
-#     title="Cumulative Returns",
-#     start_date="31/1/2020",
-#     end_date="31/12/2020",
-#     palettes="default"
-# )
+fig = plot_cumulative_returns(
+    funds=dict(list(funds.items())[:1]),
+    title="Cumulative Returns",
+    start_month="2001-1",
+    end_month="2001-12"
+)

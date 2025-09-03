@@ -1,13 +1,10 @@
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Union
 import plotly.graph_objects as go
 import pandas as pd
 import math
 import numpy as np
-
-# helper to parse flexible YYYY-M(M)
-def parse_month(mstr: str) -> datetime:
-    return datetime.strptime(mstr, "%Y-%m")
+from fofproject.utils import parse_month
 
 class Fund:
     def __init__(self, name:str, monthly_returns: List[Dict], performance_fee: float, management_fee: float):
@@ -19,18 +16,16 @@ class Fund:
             performance_fee (float): Performance fee as a decimal (e.g., 0.2 for 20%)
             management_fee (float): Management fee as a decimal (e.g., 0.01 for 1%)
         """
-        # Process date format to 'YYYY-MM' during initialization
         processed_returns = []
         for entry in monthly_returns:
             raw_date = entry['date']
             # Try parsing date in 'DD/MM/YYYY' format
-            try:
-                dt = datetime.strptime(str(raw_date), '%d/%m/%Y')
-            except ValueError:
-                # If already in 'YYYY-MM-DD', parse as such
-                dt = datetime.strptime(str(raw_date), '%Y-%m-%d')
-            entry_month = dt.strftime('%Y-%m')
-            processed_returns.append({'date': dt, 'month': entry_month, 'value': entry['value']})
+            dt = datetime.strptime(str(raw_date), '%d/%m/%Y')
+            processed_returns.append({
+                'datetime': dt, 
+                'month': datetime(dt.year, dt.month, 1), 
+                'value': entry['value']
+            })
         self.name = name
         self.monthly_returns = processed_returns
         self.performance_fee = performance_fee
@@ -58,7 +53,7 @@ class Fund:
                 f"management_fee={self.management_fee}, "
                 f"monthly_returns={len(self.monthly_returns)} entries)")
 
-    def cumulative_return(self, start_month, end_month):
+    def cumulative_return(self, start_month: Union[str, datetime], end_month: Union[str, datetime]) -> float:
         """
         Calculates cumulative value from start_month to end_month (inclusive).
 
@@ -74,15 +69,13 @@ class Fund:
         float
             The cumulative return from start_month (exclusive) to end_month (inclusive).
         """
-
-        # normalize inputs
-        start_dt = parse_month(start_month)
-        end_dt = parse_month(end_month)
+        # convert str to datetime
+        start_month = parse_month(start_month) if isinstance(start_month, str) else start_month
+        end_month = parse_month(end_month) if isinstance(end_month, str) else end_month
 
         value = 1.0
         for entry in self.monthly_returns:
-            entry_dt = parse_month(entry["month"])
-            if start_dt <= entry_dt <= end_dt:
+            if start_month <= entry["month"] <= end_month:
                 value *= (1 + float(entry["value"]))
         return value - 1.0
     
@@ -132,7 +125,7 @@ class Fund:
         end_ms = end_month.month + end_month.year * 12 if end_month else None
         vals = []
         for entry in self.monthly_returns:
-            m = entry["date"].month + entry["date"].year * 12
+            m = entry["datetime"].month + entry["datetime"].year * 12
             if ((start_ms is None or start_ms <= m)
                 and (end_ms is None or m <= end_ms)):
                 try:
@@ -224,8 +217,8 @@ class Fund:
         vals = [
             float(entry["value"])
             for entry in self.monthly_returns
-                if ((start_month is None or start_month <= entry["date"])
-                    and (end_month is None or entry["date"] <= end_month))
+                if ((start_month is None or start_month <= entry["datetime"])
+                    and (end_month is None or entry["datetime"] <= end_month))
         ]
         if not vals:
             return 0.0
