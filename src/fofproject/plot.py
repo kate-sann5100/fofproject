@@ -69,13 +69,107 @@ TRACE_CONFIG = {
     }
 }
 
+STYLE_DICT = {
+    "default": {
+        "palette": PALETTES["excel"],
+        "layout_config": {
+            "font": {
+                "family": "Roboto, MontSerrat Semibold, sans-serif",
+                "size": 14,
+                "color": "#2f2f2f"
+            },
+            "margin": {
+                "l": 70,  # left margin
+                "r": 20,  # right margin
+                "t": 70,  # top margin
+                "b": 110  # bottom margin   
+            },
+            "grid_color": "#E9E9E9",
+            "date_ticks": {
+                "num": 6, # Number of date ticks to display
+                "format": "%b %Y" # Format for date ticks
+            },
+            "annotation": {
+                "add_annotation": True, # True if we want to add an annotation
+                "position": {
+                    "x": 0.5, # scale to the entire plot area
+                    "y": -0.1 # scale to the entire plot area
+                }
+            },
+            "legend": {
+                "orientation": "v", # "h" for horizontal, "v" for vertical
+                "position": {
+                    "x": 0.0, # scale to the entire plot area
+                    "y": -0.1 # scale to the entire plot area
+                }
+            },
+        },
+        "trace_config": {
+            "mark_size": {
+                "lead": 12, # marker size for the lead fund
+                "other": 8 # marker size for the other funds
+            },
+            "line_width": {
+                "lead": 3, # line width for the lead fund
+                "other": 2 # line width for the other funds
+            }
+        }
+    },
+    "excel": {
+        "palette": PALETTES["excel"],
+        "layout_config": {
+            "font": {
+                "family": "Roboto, MontSerrat Semibold, sans-serif",
+                "size": 14,
+                "color": "#2f2f2f"
+            },
+            "margin": {
+                "l": 70,  # left margin
+                "r": 20,  # right margin
+                "t": 70,  # top margin
+                "b": 110  # bottom margin   
+            },
+            "grid_color": "#E9E9E9",
+            "date_ticks": {
+                "num": 6, # Number of date ticks to display
+                "format": "%b %Y" # Format for date ticks
+            },
+            "annotation": {
+                "add_annotation": True, # True if we want to add an annotation
+                "position": {
+                    "x": 0.5, # scale to the entire plot area
+                    "y": -0.1 # scale to the entire plot area
+                }
+            },
+            "legend": {
+                "orientation": "v", # "h" for horizontal, "v" for vertical
+                "position": {
+                    "x": 0.0, # scale to the entire plot area
+                    "y": -0.1 # scale to the entire plot area
+                }
+            },
+        },
+        "trace_config": {
+            "mark_size": {
+                "lead": 12, # marker size for the lead fund
+                "other": 8 # marker size for the other funds
+            },
+            "line_width": {
+                "lead": 3, # line width for the lead fund
+                "other": 2 # line width for the other funds
+            }
+        }
+    },
+}
+
 def plot_cumulative_returns(
         funds: Dict[str, Fund], 
-        title: str, 
-        palettes=PALETTES["default"],
-        layout_config=LAYOUT_CONFIG,
-        trace_config=TRACE_CONFIG
+        title: str,
+        style: str="default"
     ):
+    palettes = STYLE_DICT.get(style, STYLE_DICT["default"])["palette"]
+    layout_config = STYLE_DICT.get(style, STYLE_DICT["default"])["layout_config"]
+    trace_config = STYLE_DICT.get(style, STYLE_DICT["default"])["trace_config"]
 
     # Identify lead fund
     lead_name = "RDGFF" if "RDGFF" in list(funds.keys()) else (list(funds.keys())[0])
