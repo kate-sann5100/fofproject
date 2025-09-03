@@ -1,15 +1,18 @@
 from datetime import datetime
+from typing import List, Dict
 import plotly.graph_objects as go
 import pandas as pd
 import math
 import numpy as np
 class Fund:
-    def __init__(self, monthly_returns, performance_fee, management_fee):
-        """
-        monthly_returns: list of dicts, each with 'date' and 'value' keys
-        performance_fee: float (e.g., 0.2 for 20%)
-        management_fee: float (e.g., 0.01 for 1%)
-        inception_date: str in 'YYYY-MM' format or None
+    def __init__(self, name:str, monthly_returns: List[Dict], performance_fee: float, management_fee: float):
+        """Initialize a Fund object.
+
+        Args:
+            name (str): Name of the fund
+            monthly_returns (List[Dict]): List of monthly returns with 'date' and 'value' keys
+            performance_fee (float): Performance fee as a decimal (e.g., 0.2 for 20%)
+            management_fee (float): Management fee as a decimal (e.g., 0.01 for 1%)
         """
         # Process date format to 'YYYY-MM' during initialization
         processed_returns = []
@@ -22,12 +25,19 @@ class Fund:
                 # If already in 'YYYY-MM-DD', parse as such
                 dt = datetime.strptime(str(raw_date), '%Y-%m-%d')
             entry_month = dt.strftime('%Y-%m')
-            processed_returns.append({'month': entry_month, 'value': entry['value']})
+            processed_returns.append({'date': dt, 'month': entry_month, 'value': entry['value']})
+        self.name = name
         self.monthly_returns = processed_returns
         self.performance_fee = performance_fee
         self.management_fee = management_fee
-        self.inception_date = min(entry['month'] for entry in self.monthly_returns) if self.monthly_returns else None
-        self.latest_date = max(entry['month'] for entry in self.monthly_returns) if self.monthly_returns else None
+        self.inception_date = self.compute_inception_date()
+        self.latest_date = self.compute_latest_date()
+
+    def compute_inception_date(self):
+        return min(entry['month'] for entry in self.monthly_returns) if self.monthly_returns else None
+
+    def compute_latest_date(self):
+        return max(entry['month'] for entry in self.monthly_returns) if self.monthly_returns else None
 
     def __repr__(self):
         return (f"Fund(performance_fee={self.performance_fee}, "
@@ -198,7 +208,7 @@ class Fund:
         vals = [
             float(entry["value"])
             for entry in self.monthly_returns
-            if ((start_month is None or start_month = entry["month"])
+            if ((start_month is None or start_month == entry["month"])
                 and (end_month is None or entry["month"] <= end_month))
         ]
         if not vals:
