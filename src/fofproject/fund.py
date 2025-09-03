@@ -4,6 +4,11 @@ import plotly.graph_objects as go
 import pandas as pd
 import math
 import numpy as np
+
+# helper to parse flexible YYYY-M(M)
+def parse_month(mstr: str) -> datetime:
+    return datetime.strptime(mstr, "%Y-%m")
+
 class Fund:
     def __init__(self, name:str, monthly_returns: List[Dict], performance_fee: float, management_fee: float):
         """Initialize a Fund object.
@@ -32,6 +37,15 @@ class Fund:
         self.management_fee = management_fee
         self.inception_date = self.compute_inception_date()
         self.latest_date = self.compute_latest_date()
+        self.num_months = len(self.monthly_returns)
+        self.total_cum_rtn = self.cumulative_return(self.inception_date, self.latest_date) if self.monthly_returns else None
+        self.total_ann_rtn = self.annualized_return(self.inception_date, self.latest_date) if self.monthly_returns else None
+        self.total_vol = self.volatility(self.inception_date, self.latest_date) if self.monthly_returns else None
+        self.total_sharpe = self.sharpe_ratio(self.inception_date, self.latest_date) if self.monthly_returns else None
+        self.total_sortino = self.sortino_ratio(self.inception_date, self.latest_date) if self.monthly_returns else None
+        self.total_max_dd = self.max_drawdown(self.inception_date, self.latest_date) if self.monthly_returns else None
+        self.total_pos_months = self.positive_months(self.inception_date, self.latest_date) if self.monthly_returns else None
+
 
     def compute_inception_date(self):
         return min(entry['month'] for entry in self.monthly_returns) if self.monthly_returns else None
@@ -61,10 +75,6 @@ class Fund:
             The cumulative return from start_month (exclusive) to end_month (inclusive).
         """
 
-        # helper to parse flexible YYYY-M(M)
-        def parse_month(mstr: str) -> datetime:
-            return datetime.strptime(mstr, "%Y-%m")
-
         # normalize inputs
         start_dt = parse_month(start_month)
         end_dt = parse_month(end_month)
@@ -72,10 +82,9 @@ class Fund:
         value = 1.0
         for entry in self.monthly_returns:
             entry_dt = parse_month(entry["month"])
-            if start_dt < entry_dt <= end_dt:
+            if start_dt <= entry_dt <= end_dt:
                 value *= (1 + float(entry["value"]))
-
-        return value
+        return value - 1.0
     
     def annualized_return(self, start_month, end_month):
         """
@@ -86,14 +95,14 @@ class Fund:
         cumulative = self.cumulative_return(start_month, end_month)
 
         # Step 2: Parse dates
-        start_date = datetime.strptime(start_month, "%Y-%m")
-        end_date = datetime.strptime(end_month, "%Y-%m")
+        start_date =  parse_month(start_month)
+        end_date = parse_month(end_month)
 
         # Step 3: Calculate number of months in the period
-        months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) + 1
+        months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) +1
 
         # Step 4: Annualize (compound return adjusted to yearly scale)
-        annualized = cumulative ** (12 / months) - 1
+        annualized = (1+cumulative) ** (12 / months) - 1
 
         return annualized
 
@@ -117,12 +126,15 @@ class Fund:
             The standard deviation of the selected series of monthly returns.
             If the range is empty, ``0.0`` is returned.
         """
-
+        start_month =  parse_month(start_month)
+        start_ms = start_month.month + start_month.year * 12 if start_month else None
+        end_month = parse_month(end_month)
+        end_ms = end_month.month + end_month.year * 12 if end_month else None
         vals = []
         for entry in self.monthly_returns:
-            m = entry["month"]
-            if ((start_month is None or start_month <= m)
-                and (end_month is None or m <= end_month)):
+            m = entry["date"].month + entry["date"].year * 12
+            if ((start_ms is None or start_ms <= m)
+                and (end_ms is None or m <= end_ms)):
                 try:
                     vals.append(float(entry["value"]))
                 except (TypeError, ValueError):
@@ -132,7 +144,7 @@ class Fund:
         if not vals:
             return 0.0
 
-        s = pd.Series(vals, dtype="float64").dropna()
+        s = pd.Series(vals, dtype="float64")
         if s.empty:
             return 0.0
 
@@ -204,12 +216,16 @@ class Fund:
             Annualized Sortino ratio. Returns 0.0 if no usable data.
         """
 
+        start_month =  parse_month(start_month)
+        end_month = parse_month(end_month)
+
+
         # collect returns
         vals = [
             float(entry["value"])
             for entry in self.monthly_returns
-            if ((start_month is None or start_month == entry["month"])
-                and (end_month is None or entry["month"] <= end_month))
+                if ((start_month is None or start_month <= entry["date"])
+                    and (end_month is None or entry["date"] <= end_month))
         ]
         if not vals:
             return 0.0
@@ -227,10 +243,181 @@ class Fund:
         downside = np.minimum(0, s - monthly_rf)
         
         # Downside deviation (like std dev but only for negative returns)
-        downside_deviation = np.sqrt(np.mean(downside**2))
+        downside_deviation = np.sqrt((np.sum(downside**2)/(len(s)+1))) * np.sqrt(12)
         
         if downside_deviation == 0:
             return np.nan  # Avoid division by zero
-        
+        ann_return = np.prod(1 + excess_returns) ** (12 / len(excess_returns)) - 1
+        sortino = (ann_return - risk_free_rate) / downside_deviation
         # Annualized Sortino ratio
-        return np.mean(excess_returns) / downside_deviation * np.sqrt(12)
+        return sortino
+
+    def max_drawdown(self, start_month=None, end_month=None):
+        """
+        Calculate the maximum drawdown from monthly returns.
+
+        Parameters
+        ----------
+        start_month : str, optional
+            Include months strictly greater than this (exclusive lower bound).
+        end_month : str, optional
+            Include months up to and including this (inclusive upper bound).
+
+        Returns
+        -------
+        float
+            Maximum drawdown as a decimal (e.g., 0.2 for 20%).
+            Returns 0.0 if no usable data.
+        """
+
+        start_dt = parse_month(start_month)
+        end_dt = parse_month(end_month)
+
+        values = []
+        cum_value = 1.0
+
+        for entry in self.monthly_returns:
+            entry_dt = parse_month(entry["month"])
+            if start_dt <= entry_dt <= end_dt:
+                cum_value *= (1 + float(entry["value"]))
+                values.append(cum_value - 1.0)  # cumulative return up to this month
+
+        cumulative = np.array(values)
+
+        # Compute running maximum of cumulative returns
+        running_max = np.maximum.accumulate(cumulative)
+
+        # Compute drawdowns
+        drawdowns = (running_max - cumulative) / (1 + running_max)
+
+        # Maximum drawdown
+        max_drawdown = np.max(drawdowns)
+
+        return max_drawdown
+    
+    def positive_months(self, start_month=None, end_month=None):
+        """
+        Count the number of months with positive returns.
+
+        Parameters
+        ----------
+        start_month : str, optional
+            Include months strictly greater than this (exclusive lower bound).
+        end_month : str, optional
+            Include months up to and including this (inclusive upper bound).
+
+        Returns
+        -------
+        int
+            Number of months with positive returns.
+        """
+
+        start_dt = parse_month(start_month)
+        end_dt = parse_month(end_month)
+
+        count = 0
+        total = 0
+        for entry in self.monthly_returns:
+            entry_dt = parse_month(entry["month"])
+            if start_dt <= entry_dt <= end_dt and float(entry["value"]) > 0:
+                count += 1
+            total += 1
+
+        return count/total if total > 0 else 0.0
+    
+
+    def return_in_positive_months(self, start_month=None, end_month=None):
+        """
+        Calculate cumulative return in months with positive returns.
+
+        Parameters
+        ----------
+        start_month : str, optional
+            Include months strictly greater than this (exclusive lower bound).
+        end_month : str, optional
+            Include months up to and including this (inclusive upper bound).
+
+        Returns
+        -------
+        float
+            Cumulative return in months with positive returns.
+        """
+
+        start_dt = parse_month(start_month)
+        end_dt = parse_month(end_month)
+        total_rtn = 0
+        count = 0
+        for entry in self.monthly_returns:
+            entry_dt = parse_month(entry["month"])
+            if start_dt <= entry_dt <= end_dt and float(entry["value"]) > 0:
+                total_rtn += float(entry["value"]) 
+                count += 1
+
+        return total_rtn/count if count > 0 else 0.0
+    
+    def return_in_negative_months(self, start_month=None, end_month=None):
+        """
+        Calculate cumulative return in months with negative returns.
+
+        Parameters
+        ----------
+        start_month : str, optional
+            Include months strictly greater than this (exclusive lower bound).
+        end_month : str, optional
+            Include months up to and including this (inclusive upper bound).
+
+        Returns
+        -------
+        float
+            Cumulative return in months with negative returns.
+        """
+
+        start_dt = parse_month(start_month)
+        end_dt = parse_month(end_month)
+        total_rtn = 0
+        count = 0
+        for entry in self.monthly_returns:
+            entry_dt = parse_month(entry["month"])
+            if start_dt <= entry_dt <= end_dt and float(entry["value"]) < 0:
+                total_rtn += float(entry["value"]) 
+                count += 1
+
+        return total_rtn/count if count > 0 else 0.0
+    
+    def beta_to(self, benchmark_fund, start_month=None, end_month=None):
+        """
+        Calculate the beta of this fund relative to a benchmark fund.
+
+        Parameters
+        ----------
+        benchmark_fund : Fund
+            The benchmark Fund object to compare against.
+        start_month : str, optional
+            Include months strictly greater than this (exclusive lower bound).
+        end_month : str, optional
+            Include months up to and including this (inclusive upper bound).
+
+        Returns
+        -------
+        float
+            Beta of this fund relative to the benchmark fund.
+            Returns None if insufficient data.
+        """
+
+        start_dt = parse_month(start_month)
+        end_dt = parse_month(end_month)
+
+        # Collect returns for both funds in the specified date range
+        fund_returns = {}
+        benchmark_returns = {}
+
+        for entry in self.monthly_returns:
+            entry_dt = parse_month(entry["month"])
+            if start_dt <= entry_dt <= end_dt:
+                fund_returns[entry["month"]] = float(entry["value"])
+
+        for entry in benchmark_fund.monthly_returns:
+            entry_dt = parse_month(entry["month"])
+            if start_dt <= entry_dt <= end_dt:
+                benchmark_returns[entry["month"]] = float(entry["value"])
+

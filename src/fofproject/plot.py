@@ -2,6 +2,7 @@ from typing import Dict
 import pandas as pd
 import plotly.graph_objects as go
 from fofproject.fund import Fund
+import datetime as dt
 
 DEFAULT_COLOR = "#888888"
 
@@ -151,7 +152,11 @@ def plot_cumulative_returns(
             if start <= d_norm <= end:
                 dates.append(d_norm)
         # Compute cumulative returns for each month
-        cumulative_returns = [fund.cumulative_return(start_month=dates[0].strftime('%Y-%m'), end_month=date.strftime('%Y-%m')) -1 for date in dates]
+        cumulative_returns = [fund.cumulative_return(start_month=dates[0].strftime('%Y-%m'), end_month=date.strftime('%Y-%m')) for date in dates]
+        first_date = dates[0]
+        month_before = first_date - dt.timedelta(days=31)  # approx one month earlier
+        dates = [month_before] + dates
+        cumulative_returns = [0.0] + cumulative_returns
         # Update final_cumulative_returns
         final_cumulative_returns[fund.name] = cumulative_returns[-1]
         # Get color for the fund

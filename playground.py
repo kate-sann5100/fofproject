@@ -27,32 +27,18 @@ for col in df.columns:
         management_fee=0.01,
     )
 
-# Now you can access any fund by name:
-# TAIREN_fund = funds["HAO"]
-# print(TAIREN_fund.monthly_returns)
-# print(TAIREN_fund.cumulative_return(start_month="2025-06", end_month="2025-7"))
-# print(TAIREN_fund.annualized_return(start_month=TAIREN_fund.inception_date, end_month=TAIREN_fund.latest_date))
-# print(TAIREN_fund.sharpe_ratio(start_month=TAIREN_fund.inception_date, end_month=TAIREN_fund.latest_date, risk_free_rate=0.0))
-# print(TAIREN_fund.volatility(start_month=TAIREN_fund.inception_date, end_month=TAIREN_fund.latest_date))
-# print(TAIREN_fund.sortino_ratio(starst_month=TAIREN_fund.inception_date, end_month=TAIREN_fund.latest_date))
-# plot_list = funds["HAO"]
-# print(plot_list)
+# print(funds['TAIREN'].total_cum_rtn)
+# print(funds['TAIREN'].total_ann_rtn)   
+# print(funds['TAIREN'].total_vol)
+print(funds['RDGFF'].return_in_negative_months(start_month=funds['RDGFF'].inception_date,end_month=funds['RDGFF'].latest_date))
 
-keys = ['RDGFF', 'MSCI CHINA','MSCI WORLD','HAO','TAIREN']
-funds_to_be_plot = {k: funds.get(k, None) for k in keys} # or a custom default
+# keys = ['RDGFF', 'MSCI CHINA','MSCI WORLD','HAO','TAIREN']
+# funds_to_be_plot = {k: funds.get(k, None) for k in keys} # or a custom default
 
-fig = plot_cumulative_returns(
-    funds=funds_to_be_plot,
-    title="Cumulative Returns",
-    start_date="31/12/2024",
-    end_date="31/12/2025",
-    palettes="default"
-)
-# Plot cumulative returns
 # fig = plot_cumulative_returns(
-#     start_month="2024-7",
-#     end_month="2025-12",
-#     asset_columns=["HAO", "TAIREN"],
-#     df=df,
-#     style="default"
+#     funds=funds_to_be_plot,
+#     title="Cumulative Returns",
+#     start_date="31/1/2020",
+#     end_date="31/12/2020",
+#     palettes="default"
 # )
