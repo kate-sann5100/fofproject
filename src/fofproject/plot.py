@@ -2,6 +2,8 @@ from typing import Dict
 import pandas as pd
 import plotly.graph_objects as go
 from fofproject.fund import Fund
+import datetime as dt
+from dateutil.relativedelta import relativedelta
 
 DEFAULT_COLOR = "#888888"
 
@@ -46,7 +48,7 @@ LAYOUT_CONFIG = {
         "add_annotation": True, # True if we want to add an annotation
         "position": {
             "x": 0.5, # scale to the entire plot area
-            "y": -0.1 # scale to the entire plot area
+            "y": -0.13 # scale to the entire plot area
         }
     },
     "legend": {
@@ -164,12 +166,34 @@ STYLE_DICT = {
 
 def plot_cumulative_returns(
         funds: Dict[str, Fund], 
-        title: str,
-        style: str="default"
+        title: str, 
+        start_month: str = None, # YYYY-MM
+        end_month: str = None, # YYYY-MM
+        style: str = "default"
     ):
+
     palettes = STYLE_DICT.get(style, STYLE_DICT["default"])["palette"]
     layout_config = STYLE_DICT.get(style, STYLE_DICT["default"])["layout_config"]
     trace_config = STYLE_DICT.get(style, STYLE_DICT["default"])["trace_config"]
+
+    # Convert start and end month to datetime
+    start_month = dt.datetime.strptime(start_month, '%Y-%m') if start_month else None
+    end_month = dt.datetime.strptime(end_month, '%Y-%m') if end_month else None
+
+    # Collect all months across funds
+    start_months = [f.monthly_returns[0]["month"] for f in funds.values()]
+    end_months = [f.monthly_returns[-1]["month"] for f in funds.values()]
+
+    # Update start_month and end_month if the current months are not valid
+    if not (start_month and start_month > min(start_months) and start_month < max(end_months)):
+        start_month = max(start_months)
+    if not (end_month and min(start_months) < end_month < max(end_months)):
+        end_month = min(end_months)
+    # Assert start month is before end month
+    if start_month > end_month:
+        raise ValueError("start_month must be <= end_month")
+    # Get one month before start month
+    prev_month = start_month - relativedelta(months=1) # get previous month
 
     # Identify lead fund
     lead_name = "RDGFF" if "RDGFF" in list(funds.keys()) else (list(funds.keys())[0])
@@ -182,10 +206,23 @@ def plot_cumulative_returns(
     # Dict storing final cumulative returns for each fund
     final_cumulative_returns = {}
     for fund in funds.values():
-        # Get dates for the fund
-        dates = [entry['date'] for entry in fund.monthly_returns]
         # Compute cumulative returns for each month
-        cumulative_returns = [fund.cumulative_return(start_month=dates[0].strftime('%Y-%m'), end_month=date.strftime('%Y-%m')) for date in dates]
+        months = [
+            entry["month"] 
+            for entry in fund.monthly_returns 
+            if start_month <= entry["month"] <= end_month
+        ]
+        cumulative_returns = [
+            fund.cumulative_return(
+                start_month=start_month, 
+                end_month=entry["month"]
+            ) 
+            for entry in fund.monthly_returns
+            if start_month <= entry["month"] <= end_month
+        ]
+        # Add one month before
+        months = [prev_month] + months
+        cumulative_returns = [0.0] + cumulative_returns
         # Update final_cumulative_returns
         final_cumulative_returns[fund.name] = cumulative_returns[-1]
         # Get color for the fund
@@ -193,9 +230,9 @@ def plot_cumulative_returns(
         # Add trace for the fund
         fig.add_trace(
             go.Scatter(
-                x=dates,
+                x=months,
                 y=cumulative_returns,
-                mode="lines+markers",
+                mode="lines",
                 name=fund.name,
                 hovertemplate="%{x}<br>%{y:.2%}<extra></extra>",
                 line=dict(
@@ -203,13 +240,22 @@ def plot_cumulative_returns(
                     color=color, 
                     shape="spline", 
                     smoothing=0.6),
-                marker=dict(
-                    size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"], 
-                    color=color,
-                    line=dict(width=1, color="white")),
             )
         )
-
+        # Add markers for every ~10% of the data points
+        step = max(1, int(len(months) / 10))
+        fig.add_trace(
+            go.Scatter(
+                x=months[::step] + [months[-1]], 
+                y=cumulative_returns[::step] + [cumulative_returns[-1]], 
+                mode='markers',
+                showlegend=False,
+                hoverinfo='skip',
+                marker=dict(size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"],
+                color=color, 
+                line=dict(width=1, color="white"))
+            )
+        )
     # --------------------------- Set Layout ---------------------------
     fig.update_layout(
         title=dict(
@@ -227,10 +273,10 @@ def plot_cumulative_returns(
             showgrid=True,
             gridcolor=layout_config["grid_color"],
             tickformat=layout_config["date_ticks"]["format"],
-            tickvals=[dt for dt in list(dates)[::max(1, len(dates)//6)]],
+            tickvals=[dt for dt in list(months)[::max(1, len(months)//6)]],
             ticktext=[
                 dt.strftime(layout_config["date_ticks"]["format"]) 
-                for dt in list(dates)[::max(1, len(dates)//layout_config["date_ticks"]["num"])]
+                for dt in list(months)[::max(1, len(months)//layout_config["date_ticks"]["num"])]
             ],
         ),
         yaxis=dict(title="Cumulative Return (%)", tickformat=".0%", zeroline=True),
