@@ -20,60 +20,17 @@ PALETTES = {
         "MSCI WORLD": "#C1AE94",
     },
     "excel": {
-        "RDGFF": "#E0E0E0",
+        "RDGFF": "#2F2F2F",
         "MSCI CHINA": "#A67C52",
         "MSCI WORLD": "#6A5ACD",
     }
 }
 
 
-LAYOUT_CONFIG = {
-    "font": {
-        "family": "Roboto, MontSerrat Semibold, sans-serif",
-        "size": 14,
-        "color": "#2f2f2f"
-    },
-    "margin": {
-        "l": 70,  # left margin
-        "r": 20,  # right margin
-        "t": 70,  # top margin
-        "b": 110  # bottom margin   
-    },
-    "grid_color": "#E9E9E9",
-    "date_ticks": {
-        "num": 6, # Number of date ticks to display
-        "format": "%b %Y" # Format for date ticks
-    },
-    "annotation": {
-        "add_annotation": True, # True if we want to add an annotation
-        "position": {
-            "x": 0.5, # scale to the entire plot area
-            "y": -0.13 # scale to the entire plot area
-        }
-    },
-    "legend": {
-        "orientation": "v", # "h" for horizontal, "v" for vertical
-        "position": {
-            "x": 0.0, # scale to the entire plot area
-            "y": -0.1 # scale to the entire plot area
-        }
-    },
-}
-
-TRACE_CONFIG = {
-    "mark_size": {
-        "lead": 12, # marker size for the lead fund
-        "other": 8 # marker size for the other funds
-    },
-    "line_width": {
-        "lead": 3, # line width for the lead fund
-        "other": 2 # line width for the other funds
-    }
-}
 
 STYLE_DICT = {
     "default": {
-        "palette": PALETTES["excel"],
+        "palette": PALETTES["default"],
         "layout_config": {
             "font": {
                 "family": "Roboto, MontSerrat Semibold, sans-serif",
@@ -115,8 +72,24 @@ STYLE_DICT = {
                 "lead": 3, # line width for the lead fund
                 "other": 2 # line width for the other funds
             }
+        },
+        "value_boxes": {
+            "enabled": False,
+            "format": "+.2%",
+            "box": {
+                "bgcolor": "rgba(255,255,255,0.9)",
+                "borderwidth": 1,
+                "font_size": 12,
+                "xshift": 6,
+                "yshift": 6
+            },
+            # Show only for lead fund every step and final, for others only final
+            "rules": {
+                "lead":   {"every_step": True,  "final": True},
+                "others": {"every_step": False, "final": True}
+            }
         }
-    },
+                },
     "excel": {
         "palette": PALETTES["excel"],
         "layout_config": {
@@ -160,9 +133,42 @@ STYLE_DICT = {
                 "lead": 3, # line width for the lead fund
                 "other": 2 # line width for the other funds
             }
+        },
+        "value_boxes": {
+            "enabled": True,
+            "format": "+.2%",
+            "box": {
+                "bgcolor": "rgba(255,255,255,0.9)",
+                "borderwidth": 1,
+                "font_size": 12,
+                "xshift": 6,
+                "yshift": 6
+            },
+            # Show only for lead fund every step and final, for others only final
+            "rules": {
+                "lead":   {"every_step": True,  "final": True},
+                "others": {"every_step": False, "final": True}
+            }
         }
     },
+
 }
+
+def _add_value_boxes(fig, xs, ys, *, indices, color, fmt, boxcfg):
+    for i in indices:
+        fig.add_annotation(
+            x=xs[i], y=ys[i],
+            text=f"{ys[i]:{fmt}}",
+            showarrow=False,
+            bgcolor=boxcfg.get("bgcolor", "rgba(255,255,255,0.9)"),
+            bordercolor=color,
+            borderwidth=boxcfg.get("borderwidth", 1),
+            font=dict(size=boxcfg.get("font_size", 12), color=color),
+            xanchor="left", yanchor="bottom", align="center",
+            xshift=boxcfg.get("xshift", 6), yshift=boxcfg.get("yshift", 6),
+            opacity=1.0,
+        )
+
 
 def plot_cumulative_returns(
         funds: Dict[str, Fund], 
@@ -243,19 +249,56 @@ def plot_cumulative_returns(
             )
         )
         # Add markers for every ~10% of the data points
-        step = max(1, int(len(months) / 10))
+        step = max(1, int(len(months) / 12))
+        marker_indices = list(range(0, len(months), step))
+        box_indices = list(range(0, len(months), step * 2))
+        # always include the last point
+        if (len(months) - 1) not in marker_indices:
+            marker_indices.append(len(months) - 1)
+
         fig.add_trace(
             go.Scatter(
-                x=months[::step] + [months[-1]], 
-                y=cumulative_returns[::step] + [cumulative_returns[-1]], 
+                x=[months[i] for i in marker_indices],
+                y=[cumulative_returns[i] for i in marker_indices],
                 mode='markers',
                 showlegend=False,
                 hoverinfo='skip',
-                marker=dict(size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"],
-                color=color, 
-                line=dict(width=1, color="white"))
+                marker=dict(
+                    size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"],
+                    color=color,
+                    line=dict(width=1, color="white")
             )
         )
+    )
+        value_box_cfg = STYLE_DICT.get(style, STYLE_DICT["default"]).get("value_boxes", {})
+        if value_box_cfg.get("enabled", False):
+            rules = value_box_cfg.get("rules", {
+                "lead": {"every_step": True, "final": True},
+                "others": {"every_step": False, "final": True}
+            })
+            is_lead = (fund.name == lead_name)
+
+            idxs = []
+            if is_lead and rules["lead"].get("every_step", True):
+                # just copy box_indices for lead
+                idxs.extend(box_indices)
+            elif (not is_lead) and rules["others"].get("every_step", False):
+                idxs.extend(box_indices)
+            if (is_lead and rules["lead"].get("final", True)) or (not is_lead and rules["others"].get("final", True)):
+                last = len(months) - 1
+                if last not in idxs:
+                    idxs.append(last)
+
+            if idxs:  # draw
+                _add_value_boxes(
+                    fig,
+                    months,
+                    cumulative_returns,
+                    indices=sorted(set(idxs)),
+                    color=palettes.get(fund.name, DEFAULT_COLOR),
+                    fmt=value_box_cfg.get("format", "+.2%"),
+                    boxcfg=value_box_cfg.get("box", {})
+                )
     # --------------------------- Set Layout ---------------------------
     fig.update_layout(
         title=dict(
