@@ -33,14 +33,19 @@ for col in df.columns:
 # print(funds['RDGFF'].return_in_negative_months(start_month=funds['RDGFF'].inception_date,end_month=funds['RDGFF'].latest_date))
 keys = ['RDGFF', 'MSCI CHINA','MSCI WORLD']
 funds_to_be_plot = {k: funds.get(k, None) for k in keys} # or a custom default
+# 基金回报历史走势
 
-fig = plot_cumulative_returns(
-    funds=funds_to_be_plot,
-    title="Cumulative Returns",
-    start_month="2020-1",
-    end_month="2020-12",
-    style="default"
-)
 
-print(funds['MSCI CHINA'].cumulative_return(start_month="2020-1", end_month="2020-12"))
-print(funds['MSCI WORLD'].cumulative_return(start_month="2020-1", end_month="2020-12"))
+# fig = plot_cumulative_returns(
+#     funds=funds_to_be_plot,
+#     title="Cumulative Returns",
+#     start_month="2020-1",
+#     end_month="2020-12",
+#     style="default",
+#     language="en"
+# )
+
+fig = funds["LEXINGTON"].plot_monthly_return_distribution()
+
+# print(funds['MSCI CHINA'].cumulative_return(start_month="2020-1", end_month="2020-12"))
+# print(funds['MSCI WORLD'].cumulative_return(start_month="2020-1", end_month="2020-12"))

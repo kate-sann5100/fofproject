@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import math
 import numpy as np
-from fofproject.utils import parse_month
+from fofproject.utils import parse_month, hex_to_rgba
 
 class Fund:
     def __init__(self, name:str, monthly_returns: List[Dict], performance_fee: float, management_fee: float):
@@ -376,41 +376,219 @@ class Fund:
                 count += 1
 
         return total_rtn/count if count > 0 else 0.0
-    
-    def beta_to(self, benchmark_fund, start_month=None, end_month=None):
+
+    def plot_monthly_return_distribution(
+        self,
+        *,
+        start_month: str | None = None,   # "YYYY-MM"
+        end_month: str | None = None,     # "YYYY-MM"
+        bins: int = 24,
+        value_key: str = "value",         # key in each monthly_returns entry
+        show_stats_lines: bool = True
+    ):
         """
-        Calculate the beta of this fund relative to a benchmark fund.
-
-        Parameters
-        ----------
-        benchmark_fund : Fund
-            The benchmark Fund object to compare against.
-        start_month : str, optional
-            Include months strictly greater than this (exclusive lower bound).
-        end_month : str, optional
-            Include months up to and including this (inclusive upper bound).
-
-        Returns
-        -------
-        float
-            Beta of this fund relative to the benchmark fund.
-            Returns None if insufficient data.
+        Plot a histogram (bar chart) of this fund's historical monthly returns.
+        Style is defined directly inside the function (no external STYLE_DICT).
+        Adds a smoothed KDE curve for a softer distribution edge.
         """
+        import numpy as np
+        import plotly.graph_objects as go
+        from math import sqrt, pi, exp
 
-        start_dt = parse_month(start_month)
-        end_dt = parse_month(end_month)
+        # --- small helper (in case it's not already defined) ---
+        def hex_to_rgba(hx: str, alpha: float = 1.0) -> str:
+            hx = hx.lstrip("#")
+            r, g, b = int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16)
+            return f"rgba({r},{g},{b},{alpha})"
 
-        # Collect returns for both funds in the specified date range
-        fund_returns = {}
-        benchmark_returns = {}
+        # ----- style + palette (inlined here) -----
+        layout_config = {
+            "font": dict(family="Montserrat, Roboto", size=14, color="#53565A"),
+            "margin": dict(l=54, r=42, t=84, b=72),
+            "grid_color": "#e9e9ea"
+        }
+        color = "#C1AE94"   # keep your requested color
+        fund_name = self.name or "Fund"
 
-        for entry in self.monthly_returns:
-            entry_dt = parse_month(entry["month"])
-            if start_dt <= entry_dt <= end_dt:
-                fund_returns[entry["month"]] = float(entry["value"])
+        # ----- clamp date window to available history -----
+        sm = parse_month(start_month) if start_month else self.inception_date
+        em = parse_month(end_month) if end_month else self.latest_date
 
-        for entry in benchmark_fund.monthly_returns:
-            entry_dt = parse_month(entry["month"])
-            if start_dt <= entry_dt <= end_dt:
-                benchmark_returns[entry["month"]] = float(entry["value"])
+        if not self.monthly_returns:
+            raise ValueError("No monthly_returns available on this fund.")
 
+        months_all = [e.get("month") for e in self.monthly_returns if "month" in e]
+        first_m, last_m = months_all[0], months_all[-1]
+        sm = sm or first_m
+        em = em or last_m
+        if sm > em:
+            raise ValueError("start_month must be <= end_month")
+
+        # ----- extract values -----
+        vals = []
+        for e in self.monthly_returns:
+            m = e.get("month")
+            if m is None or not (sm <= m <= em):
+                continue
+            if value_key in e:
+                vals.append(float(e[value_key]))
+            else:
+                for k_guess in ("return", "ret", "monthly_return", "value"):
+                    if k_guess in e:
+                        vals.append(float(e[k_guess]))
+                        break
+
+        if not vals:
+            raise ValueError(f"No monthly return values found for {fund_name} in the requested window.")
+
+        vals = np.array(vals, dtype=float)
+        n = len(vals)
+        mean_r = float(np.mean(vals))
+        p5, p50, p95 = (float(x) for x in np.percentile(vals, [5, 50, 95]))
+
+        # ----- histogram bin width (for KDE scaling into % per bin) -----
+        vmin, vmax = float(np.min(vals)), float(np.max(vals))
+        # guard against zero-width
+        rng = vmax - vmin if vmax > vmin else max(abs(vmax), 1e-6)
+        bin_width = rng / max(bins, 1)
+
+        # ----- simple Gaussian KDE (no scipy) -----
+        # Scott's rule-of-thumb bandwidth
+        std = float(np.std(vals)) if n > 1 else 1e-6
+        h = 1.06 * std * (n ** (-1/5)) if n > 1 and std > 0 else (rng / 20.0 or 1e-3)
+
+        x_grid = np.linspace(vmin - bin_width, vmax + bin_width, 400)
+
+        def gaussian_kernel(u):
+            return (1.0 / sqrt(2 * pi)) * np.exp(-0.5 * u * u)
+
+        if n > 0:
+            # density f(x), integrates to 1
+            diffs = (x_grid[:, None] - vals[None, :]) / h
+            dens = np.mean(gaussian_kernel(diffs), axis=1) / h
+            # Scale to approximate histogram '% of months per bin' at each x:
+            kde_percent = dens * bin_width * 100.0
+        else:
+            kde_percent = np.zeros_like(x_grid)
+
+        # ----- figure -----
+        fig = go.Figure()
+
+        # Histogram with softer edges: semi-transparent fill + lighter outline
+        fig.add_trace(
+            go.Histogram(
+                x=vals,
+                nbinsx=bins,
+                histnorm="percent",
+                marker=dict(
+                    color=hex_to_rgba(color, 0.55),
+                    line=dict(color=hex_to_rgba(color, 0.85), width=0.8)
+                ),
+                opacity=0.95,
+                hovertemplate=(
+                    "<b>%{x.start:.2%} – %{x.end:.2%}</b>"
+                    "<br>%{y:.1f}% of months"
+                    "<extra></extra>"
+                ),
+                name=fund_name,
+                showlegend=False
+            )
+        )
+
+        # Smooth KDE curve on top for a softer distribution "edge"
+        fig.add_trace(
+            go.Scatter(
+                x=x_grid,
+                y=kde_percent,
+                mode="lines",
+                line=dict(color=color, width=3),
+                name="KDE",
+                hovertemplate="<b>%{x:.2%}</b><br>%{y:.2f}% (smooth)<extra></extra>",
+                showlegend=False
+            )
+        )
+
+        # ----- reference lines -----
+        if show_stats_lines:
+            # 0% vertical line
+            fig.add_shape(
+                type="line", x0=0, x1=0, y0=0, y1=1,
+                xref="x", yref="paper",
+                line=dict(color="#2F2F2F", width=1, dash="dash")
+            )
+            fig.add_annotation(
+                x=0, y=1.02, xref="x", yref="paper",
+                text="0%", showarrow=False, font=dict(size=12, color="#666")
+            )
+            # mean line
+            fig.add_shape(
+                type="line", x0=mean_r, x1=mean_r, y0=0, y1=1,
+                xref="x", yref="paper",
+                line=dict(color=color, width=2)
+            )
+            fig.add_annotation(
+                x=mean_r, y=1.02, xref="x", yref="paper",
+                text=f"Mean {mean_r:.2%}", showarrow=False,
+                font=dict(size=12, color=color)
+            )
+
+        # ----- layout tweaks for a cleaner, smoother feel -----
+        fig.update_layout(
+            title=dict(
+                text=f"<b>{fund_name} — Monthly Return Distribution</b>",
+                font=dict(size=26),
+                x=0.5, xanchor="center", y=0.97, yanchor="middle"
+            ),
+            template="plotly_white",
+            font=layout_config["font"],
+            margin=layout_config["margin"],
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            hovermode="x unified",
+            hoverlabel=dict(
+                font=dict(family=layout_config["font"]["family"], size=13, color="#333"),
+                bgcolor="white",
+                bordercolor=hex_to_rgba(color, 0.6)
+            ),
+            xaxis=dict(
+                title="Monthly Return",
+                tickformat="+.0%",
+                showgrid=True,
+                gridcolor=layout_config["grid_color"],
+                zeroline=False,
+                ticks="outside",
+                ticklen=6,
+                tickcolor="#d7d7d9"
+            ),
+            yaxis=dict(
+                title="Months (%)",
+                ticksuffix="%",
+                showgrid=True,
+                gridcolor=layout_config["grid_color"],
+                zeroline=False,
+                ticks="outside",
+                ticklen=6,
+                tickcolor="#d7d7d9"
+            ),
+            bargap=0.35
+        )
+
+        # small stats box (subtle, right-top)
+        fig.add_annotation(
+            xref="paper", yref="paper",
+            x=0.98, y=0.98, xanchor="right", yanchor="top",
+            align="right", showarrow=False,
+            text=(
+                f"<span style='color:{color};'><b>{fund_name}</b></span><br>"
+                f"n = {n}<br>"
+                f"Mean = {mean_r:.2%}<br>"
+                f"Median = {p50:.2%}<br>"
+                f"P5 / P95 = {p5:.2%} / {p95:.2%}"
+            ),
+            bgcolor="#F6F6F7",
+            bordercolor=hex_to_rgba(color, 0.9),
+            borderwidth=1
+        )
+
+        fig.show()
+        return fig

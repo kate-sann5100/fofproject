@@ -98,7 +98,7 @@ STYLE_DICT = {
         "palette": PALETTES["excel"],
         "layout_config": {
             "font": {
-                "family": "Roboto, MontSerrat Semibold, sans-serif",
+                "family": "Microsoft Yahei Light, Roboto, sans-serif",
                 "size": 14,
                 "color": "#2f2f2f"
             },
@@ -124,7 +124,7 @@ STYLE_DICT = {
                 "orientation": "h", # "h" for horizontal, "v" for vertical
                 "position": {
                     "x": 0.5, # scale to the entire plot area
-                    "y": -0.1 # scale to the entire plot area
+                    "y": -0.12 # scale to the entire plot area
                 }
             },
         },
@@ -182,7 +182,8 @@ def plot_cumulative_returns(
         title: str, 
         start_month: str = None, # YYYY-MM
         end_month: str = None, # YYYY-MM
-        style: str = "default"
+        style: str = "default",
+        language: str = "en"  # "en" or "cn"
     ):
 
     palettes = STYLE_DICT.get(style, STYLE_DICT["default"])["palette"]
@@ -255,6 +256,18 @@ def plot_cumulative_returns(
                     smoothing=0.6),
             )
         )
+
+        # --- Add annotation ---
+        fig.add_annotation(
+            xref="paper", yref="paper",
+            x=1, y=-0.2,         
+            text="<b>Strictly Confidential</b>" if language == "en" else "内部信息 严格密保",
+            showarrow=False,
+            font=dict(size=9, color="black"), 
+            xanchor="right", yanchor="bottom", align="center",
+            opacity=0.15,  
+        )
+
         step = max(1, int(len(months) / 12))
         marker_indices = list(range(0, len(months), step))
         box_indices = list(range(0, len(months), step * 2))
@@ -280,6 +293,7 @@ def plot_cumulative_returns(
                 )
             )
         )
+        # Add value boxes based on whether the trace is a lead or not / some style do not need value boxes
         value_box_cfg = STYLE_DICT.get(style, STYLE_DICT["default"]).get("value_boxes", {})
         if value_box_cfg.get("enabled", False):
             rules = value_box_cfg.get("rules", {
@@ -314,8 +328,8 @@ def plot_cumulative_returns(
         title=dict(
             text=f"<b>{title}</b>", 
             font=dict(size=32), 
-            xanchor="center", 
-            x=0.5, 
+            xanchor="left" if style == "excel" else "center", 
+            x=0.0 if style == "excel" else 0.5, 
             yanchor="middle", 
             y=0.95
         ),
@@ -373,3 +387,8 @@ def plot_cumulative_returns(
     fig.show()
     
     return fig
+
+# def plot_correlation_heatmap(
+#         df: pd.DataFrame,
+#         title: str = "Correlation Heatmap",
+#         style: str = "default",
