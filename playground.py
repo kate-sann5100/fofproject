@@ -31,7 +31,7 @@ for col in df.columns:
 # print(funds['TAIREN'].total_ann_rtn)   
 # print(funds['TAIREN'].total_vol)
 # print(funds['RDGFF'].return_in_negative_months(start_month=funds['RDGFF'].inception_date,end_month=funds['RDGFF'].latest_date))
-keys = ['RDGFF', 'MSCI CHINA','MSCI WORLD','HAO','TAIREN']
+keys = ['RDGFF', 'MSCI CHINA','MSCI WORLD']
 funds_to_be_plot = {k: funds.get(k, None) for k in keys} # or a custom default
 
 fig = plot_cumulative_returns(
@@ -39,5 +39,8 @@ fig = plot_cumulative_returns(
     title="Cumulative Returns",
     start_month="2020-1",
     end_month="2020-12",
-    style="excel"
+    style="default"
 )
+
+print(funds['MSCI CHINA'].cumulative_return(start_month="2020-1", end_month="2020-12"))
+print(funds['MSCI WORLD'].cumulative_return(start_month="2020-1", end_month="2020-12"))

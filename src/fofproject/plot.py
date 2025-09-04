@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from fofproject.fund import Fund
 import datetime as dt
 from dateutil.relativedelta import relativedelta
+from fofproject.utils import hex_to_rgba
 
 DEFAULT_COLOR = "#888888"
 
@@ -20,9 +21,9 @@ PALETTES = {
         "MSCI WORLD": "#C1AE94",
     },
     "excel": {
-        "RDGFF": "#2F2F2F",
-        "MSCI CHINA": "#A67C52",
-        "MSCI WORLD": "#6A5ACD",
+        "RDGFF": "#C1AE94",
+        "MSCI CHINA": "#989A9C",
+        "MSCI WORLD": "#DDDDDE",
     }
 }
 
@@ -52,7 +53,7 @@ STYLE_DICT = {
                 "add_annotation": True, # True if we want to add an annotation
                 "position": {
                     "x": 0.5, # scale to the entire plot area
-                    "y": -0.1 # scale to the entire plot area
+                    "y": -0.15 # scale to the entire plot area
                 }
             },
             "legend": {
@@ -72,6 +73,9 @@ STYLE_DICT = {
                 "lead": 3, # line width for the lead fund
                 "other": 2 # line width for the other funds
             }
+        },
+        "markers": {
+            "enabled": True   # 👈 markers every ~10% of the data points   
         },
         "value_boxes": {
             "enabled": False,
@@ -104,22 +108,22 @@ STYLE_DICT = {
                 "t": 70,  # top margin
                 "b": 110  # bottom margin   
             },
-            "grid_color": "#E9E9E9",
+            "grid_color": "#DACEBF",
             "date_ticks": {
                 "num": 6, # Number of date ticks to display
                 "format": "%b %Y" # Format for date ticks
             },
             "annotation": {
-                "add_annotation": True, # True if we want to add an annotation
+                "add_annotation": False, # True if we want to add an annotation
                 "position": {
                     "x": 0.5, # scale to the entire plot area
-                    "y": -0.1 # scale to the entire plot area
+                    "y": -0.13 # scale to the entire plot area
                 }
             },
             "legend": {
-                "orientation": "v", # "h" for horizontal, "v" for vertical
+                "orientation": "h", # "h" for horizontal, "v" for vertical
                 "position": {
-                    "x": 0.0, # scale to the entire plot area
+                    "x": 0.5, # scale to the entire plot area
                     "y": -0.1 # scale to the entire plot area
                 }
             },
@@ -133,6 +137,9 @@ STYLE_DICT = {
                 "lead": 3, # line width for the lead fund
                 "other": 2 # line width for the other funds
             }
+        },
+        "markers": {
+            "enabled": False   # 👈 no markers for excel style
         },
         "value_boxes": {
             "enabled": True,
@@ -160,7 +167,7 @@ def _add_value_boxes(fig, xs, ys, *, indices, color, fmt, boxcfg):
             x=xs[i], y=ys[i],
             text=f"{ys[i]:{fmt}}",
             showarrow=False,
-            bgcolor=boxcfg.get("bgcolor", "rgba(255,255,255,0.9)"),
+            bgcolor=hex_to_rgba(color, 0.15),   # transparent fill based on trace color
             bordercolor=color,
             borderwidth=boxcfg.get("borderwidth", 1),
             font=dict(size=boxcfg.get("font_size", 12), color=color),
@@ -240,7 +247,7 @@ def plot_cumulative_returns(
                 y=cumulative_returns,
                 mode="lines",
                 name=fund.name,
-                hovertemplate="%{x}<br>%{y:.2%}<extra></extra>",
+                hovertemplate="<b>%{fullData.name}</b><br>%{y:.2%}<extra></extra>",
                 line=dict(
                     width=trace_config["line_width"]["lead"] if fund.name == lead_name else trace_config["line_width"]["other"], 
                     color=color, 
@@ -248,28 +255,31 @@ def plot_cumulative_returns(
                     smoothing=0.6),
             )
         )
-        # Add markers for every ~10% of the data points
         step = max(1, int(len(months) / 12))
         marker_indices = list(range(0, len(months), step))
         box_indices = list(range(0, len(months), step * 2))
-        # always include the last point
-        if (len(months) - 1) not in marker_indices:
-            marker_indices.append(len(months) - 1)
 
-        fig.add_trace(
-            go.Scatter(
-                x=[months[i] for i in marker_indices],
-                y=[cumulative_returns[i] for i in marker_indices],
-                mode='markers',
-                showlegend=False,
-                hoverinfo='skip',
-                marker=dict(
-                    size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"],
-                    color=color,
-                    line=dict(width=1, color="white")
+        # Add markers for every ~10% of the data points
+        if STYLE_DICT.get(style, STYLE_DICT["default"]).get("markers", {}).get("enabled", False):
+
+            # always include the last point
+            if (len(months) - 1) not in marker_indices:
+                marker_indices.append(len(months) - 1)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[months[i] for i in marker_indices],
+                    y=[cumulative_returns[i] for i in marker_indices],
+                    mode='markers',
+                    showlegend=False,
+                    hoverinfo='skip',
+                    marker=dict(
+                        size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"],
+                        color=color,
+                        line=dict(width=1, color="white")
+                )
             )
         )
-    )
         value_box_cfg = STYLE_DICT.get(style, STYLE_DICT["default"]).get("value_boxes", {})
         if value_box_cfg.get("enabled", False):
             rules = value_box_cfg.get("rules", {
