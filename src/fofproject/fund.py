@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import math
 import numpy as np
-from fofproject.utils import parse_month
+from fofproject.utils import parse_month, list_of_dicts_to_df
 
 class Fund:
     def __init__(self, name:str, monthly_returns: List[Dict], performance_fee: float, management_fee: float):
@@ -377,6 +377,29 @@ class Fund:
 
         return total_rtn/count if count > 0 else 0.0
     
+    def correlation_to(self, benchmark_fund, start_month=None, end_month=None):
+        """_summary_
+
+        Args:
+            benchmark_fund (Fund Class): A index that you want to compare/calculate the correlation with
+            start_month (_type_): _description_
+            end_month (_type_): _description_
+        """
+        # Example: list1 and list2 are your two lists
+        df1 = list_of_dicts_to_df(self.monthly_returns, "value1")
+        df2 = list_of_dicts_to_df(benchmark_fund.monthly_returns, "value2")
+
+        # Merge on 'month' to align them
+        merged = pd.merge(df1, df2, on="month", how="inner")
+        merged.dropna
+        if start_month == None and end_month == None:
+            filtered = merged
+        else: 
+            filtered = merged[(merged["month"] >= parse_month(start_month)) & (df["month"] <= parse_month(end_month))]
+        # Compute correlation
+        corr = filtered["value1"].corr(filtered["value2"])
+        return corr
+
     def beta_to(self, benchmark_fund, start_month=None, end_month=None):
         """
         Calculate the beta of this fund relative to a benchmark fund.
@@ -397,20 +420,6 @@ class Fund:
             Returns None if insufficient data.
         """
 
-        start_dt = parse_month(start_month)
-        end_dt = parse_month(end_month)
-
-        # Collect returns for both funds in the specified date range
-        fund_returns = {}
-        benchmark_returns = {}
-
-        for entry in self.monthly_returns:
-            entry_dt = parse_month(entry["month"])
-            if start_dt <= entry_dt <= end_dt:
-                fund_returns[entry["month"]] = float(entry["value"])
-
-        for entry in benchmark_fund.monthly_returns:
-            entry_dt = parse_month(entry["month"])
-            if start_dt <= entry_dt <= end_dt:
-                benchmark_returns[entry["month"]] = float(entry["value"])
-
+        covariance = self.total_vol * benchmark_fund.total_vol  * self.correlation_to(benchmark_fund,start_month=start_month,end_month=end_month)
+        beta = covariance / (benchmark_fund.total_vol **2)
+        return beta
