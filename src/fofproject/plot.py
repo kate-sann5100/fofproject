@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from fofproject.fund import Fund
 import datetime as dt
 from dateutil.relativedelta import relativedelta
+import numpy as np
 from fofproject.utils import hex_to_rgba
 
 DEFAULT_COLOR = "#888888"
@@ -388,7 +389,80 @@ def plot_cumulative_returns(
     
     return fig
 
-# def plot_correlation_heatmap(
-#         df: pd.DataFrame,
-#         title: str = "Correlation Heatmap",
-#         style: str = "default",
+def plot_fund_correlation_heatmap(
+    funds: dict,
+    *,
+    method: str = "pearson",      # "pearson" | "spearman" | "kendall"
+    min_overlap: int = 6,         # require at least this many overlapping months for a correlation
+    title: str = "Fund Return Correlations"
+):
+    """
+    Build pairwise correlations of monthly returns using pairwise-complete data (max overlap)
+    and plot as a heatmap. Returns (fig, corr_df, overlap_df).
+    """
+    # 1) Assemble a wide DataFrame of monthly returns aligned on month
+    series = {}
+    for name, f in funds.items():
+        s = pd.Series(
+            {e["month"]: float(e["value"]) for e in f.monthly_returns if e.get("value") is not None}
+        ).sort_index()
+        series[name] = s
+
+    wide = pd.DataFrame(series)  # index: month; columns: fund names (may contain NaN for missing months)
+
+    # 2) Pairwise overlap counts (n_ij) and correlations with pairwise-complete observations
+    mask = wide.notna().astype(int)
+    overlap = mask.T @ mask                        # n_ij = count of months present in both i and j
+    corr = wide.corr(method=method, min_periods=min_overlap)
+
+    # Ensure diagonals look tidy
+    for c in corr.columns:
+        corr.loc[c, c] = 1.0
+        overlap.loc[c, c] = mask[c].sum()
+
+    # 3) Build labels and hover text
+    funds_order = list(corr.columns)
+    z = corr.loc[funds_order, funds_order].values
+    n_pairs = overlap.loc[funds_order, funds_order].values
+
+    text = np.empty_like(z, dtype=object)
+    hover = np.empty_like(z, dtype=object)
+    for i, rname in enumerate(funds_order):
+        for j, cname in enumerate(funds_order):
+            r = z[i, j]
+            n = int(n_pairs[i, j])
+            if pd.isna(r):
+                text[i, j] = "–"
+                hover[i, j] = f"{rname} × {cname}<br>n = {n}<br>not enough overlap"
+            else:
+                text[i, j] = f"{r:.2f}\n(n={n})"
+                hover[i, j] = f"{rname} × {cname}<br>ρ = {r:.3f}<br>n = {n}"
+
+    # 4) Plotly heatmap (diverging scale, centered at 0)
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=z,
+            x=funds_order,
+            y=funds_order,
+            colorscale="RdBu",
+            zmin=-1, zmax=1, zmid=0,
+            colorbar=dict(title="ρ"),
+            text=text,
+            texttemplate="%{text}",
+            hoverinfo="text",
+            hovertext=hover
+        )
+    )
+
+    # 5) Layout polish
+    fig.update_layout(
+        title=dict(text=f"<b>{title}</b>", x=0.5, xanchor="center"),
+        template="plotly_white",
+        font=dict(family="Montserrat, Roboto", size=13, color="#53565A"),
+        margin=dict(l=80, r=40, t=80, b=80),
+        xaxis=dict(showgrid=False, tickangle=45),
+        yaxis=dict(showgrid=False, autorange="reversed")  # matrix-style orientation
+    )
+
+    fig.show()
+    return fig, corr, overlap

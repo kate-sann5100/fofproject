@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.graph_objects as go
 from src.fofproject.fund import Fund
-from src.fofproject.plot import plot_cumulative_returns
+from src.fofproject.plot import plot_cumulative_returns, plot_fund_correlation_heatmap
 
 # Load return data from Excel
 file_path = r"RETURN DATA.csv"
@@ -45,7 +45,10 @@ funds_to_be_plot = {k: funds.get(k, None) for k in keys} # or a custom default
 #     language="en"
 # )
 
-fig = funds["LEXINGTON"].plot_monthly_return_distribution()
+# fig = funds["LEXINGTON"].plot_monthly_return_distribution()
+
+fig, corr_df, overlap_df = plot_fund_correlation_heatmap(funds, method="pearson", min_overlap=12)
+fig.show()
 
 # print(funds['MSCI CHINA'].cumulative_return(start_month="2020-1", end_month="2020-12"))
 # print(funds['MSCI WORLD'].cumulative_return(start_month="2020-1", end_month="2020-12"))
