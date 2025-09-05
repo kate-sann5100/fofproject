@@ -330,7 +330,7 @@ def plot_cumulative_returns(
             text=f"<b>{title}</b>", 
             font=dict(size=32), 
             xanchor="left" if style == "excel" else "center", 
-            x=0.0 if style == "excel" else 0.5, 
+            x=0.15 if style == "excel" else 0.5, 
             yanchor="middle", 
             y=0.95
         ),
