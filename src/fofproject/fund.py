@@ -6,6 +6,40 @@ import math
 import numpy as np
 from fofproject.utils import parse_month, list_of_dicts_to_df, hex_to_rgba
 
+def input_monthly_returns(file_path, performance_fee = 0.2, management_fee = 0.01):
+    """Read monthly returns from a CSV file and create Fund instances."""
+    # Read CSV file
+    df = pd.read_csv(file_path)
+    funds = {}
+    for col in df.columns:
+        if col == "date":
+            continue  # skip the date column
+
+
+        returns = [
+            {"date": d, "value": v}
+            for d, v in zip(df["date"], df[col])
+            if pd.notna(v)
+        ]
+
+        # Create a Fund instance
+        funds[col] = Fund(
+            name=col,
+            monthly_returns=returns,
+            performance_fee=performance_fee,
+            management_fee=management_fee,
+        )
+    return funds
+
+def subset_of_funds(funds,keys=None):
+    """funds: dict of Fund instances;
+       keys: list of fund names to extract"""
+    default = ['RDGFF', 'MSCI CHINA', 'MSCI GLOBAL']
+    if keys is None:
+        keys = default
+    funds_to_be_plot = {k: funds.get(k, None) for k in keys} # or a custom default
+    return funds_to_be_plot
+
 class Fund:
     def __init__(self, name:str, monthly_returns: List[Dict], performance_fee: float, management_fee: float):
         """Initialize a Fund object.
@@ -41,7 +75,13 @@ class Fund:
         self.total_max_dd = self.max_drawdown(self.inception_date, self.latest_date) if self.monthly_returns else None
         self.total_pos_months = self.positive_months(self.inception_date, self.latest_date) if self.monthly_returns else None
 
-
+    def get_monthly_return(self, year: int, month: int):
+        target = datetime(year, month, 1)
+        for entry in self.monthly_returns:
+            if entry['month'] == target:
+                return entry['value']
+        return None
+    
     def compute_inception_date(self):
         return min(entry['month'] for entry in self.monthly_returns) if self.monthly_returns else None
 
@@ -240,7 +280,7 @@ class Fund:
         
         if downside_deviation == 0:
             return np.nan  # Avoid division by zero
-        ann_return = np.prod(1 + excess_returns) ** (12 / len(excess_returns)) - 1
+        ann_return = self.annualized_return(start_month, end_month)
         sortino = (ann_return - risk_free_rate) / downside_deviation
         # Annualized Sortino ratio
         return sortino
@@ -395,7 +435,7 @@ class Fund:
         if start_month == None and end_month == None:
             filtered = merged
         else: 
-            filtered = merged[(merged["month"] >= parse_month(start_month)) & (df["month"] <= parse_month(end_month))]
+            filtered = merged[(merged["month"] >= parse_month(start_month)) & (merged["month"] <= parse_month(end_month))]
         # Compute correlation
         corr = filtered["value1"].corr(filtered["value2"])
         return corr
