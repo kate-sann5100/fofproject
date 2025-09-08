@@ -6,33 +6,12 @@ import datetime as dt
 from dateutil.relativedelta import relativedelta
 import numpy as np
 from fofproject.utils import hex_to_rgba
+from itertools import cycle
 
-DEFAULT_COLOR = "#888888"
-
-# palettes to decide colors for different funds based on themes
-PALETTES = {
-    "default": {
-        "RDGFF": "#2F2F2F",
-        "MSCI CHINA": "#D8C3A5",
-        "MSCI WORLD": "#B8AEA0",
-    },
-    "dark": {
-        "RDGFF": "#B58B80",
-        "MSCI CHINA": "#DACEBF",
-        "MSCI WORLD": "#C1AE94",
-    },
-    "excel": {
-        "RDGFF": "#C1AE94",
-        "MSCI CHINA": "#989A9C",
-        "MSCI WORLD": "#DDDDDE",
-    }
-}
-
-
+DEFAULT_COLOR = "#D8C3A5"
 
 STYLE_DICT = {
     "default": {
-        "palette": PALETTES["default"],
         "layout_config": {
             "font": {
                 "family": "Roboto, MontSerrat Semibold, sans-serif",
@@ -73,7 +52,20 @@ STYLE_DICT = {
             "line_width": {
                 "lead": 3, # line width for the lead fund
                 "other": 2 # line width for the other funds
-            }
+            },
+            "color": {
+                "lead": "#2F2F2F",
+                "other": [
+                    "#8FC0A9",  # (light teal green)
+                    "#A8DADC",  # pale warm taupe
+                    "#4A4E69",  # soft cream
+                    "#6D6875",  # muted sandy tan
+                    "#9A8C98",  # off-white with warmth
+                    "#E07A5F",  # light stone grey
+                    "#81B29A",  # pale oat
+                    "#3D405B"   # light almond
+                ]
+            },
         },
         "markers": {
             "enabled": True   # 👈 markers every ~10% of the data points   
@@ -96,7 +88,7 @@ STYLE_DICT = {
         }
                 },
     "excel": {
-        "palette": PALETTES["excel"],
+        # "palette": PALETTES["excel"],
         "layout_config": {
             "font": {
                 "family": "Microsoft Yahei Light, Roboto, sans-serif",
@@ -137,7 +129,20 @@ STYLE_DICT = {
             "line_width": {
                 "lead": 3, # line width for the lead fund
                 "other": 2 # line width for the other funds
-            }
+            },
+            "color": {
+                "lead": "#2F2F2F",
+                "other": [
+                    "#8FC0A9",  # (light teal green)
+                    "#A8DADC",  # pale warm taupe
+                    "#4A4E69",  # soft cream
+                    "#6D6875",  # muted sandy tan
+                    "#9A8C98",  # off-white with warmth
+                    "#E07A5F",  # light stone grey
+                    "#81B29A",  # pale oat
+                    "#3D405B"   # light almond
+                ]
+            },
         },
         "markers": {
             "enabled": False   # 👈 no markers for excel style
@@ -187,7 +192,6 @@ def plot_cumulative_returns(
         language: str = "en"  # "en" or "cn"
     ):
 
-    palettes = STYLE_DICT.get(style, STYLE_DICT["default"])["palette"]
     layout_config = STYLE_DICT.get(style, STYLE_DICT["default"])["layout_config"]
     trace_config = STYLE_DICT.get(style, STYLE_DICT["default"])["trace_config"]
 
@@ -220,7 +224,8 @@ def plot_cumulative_returns(
 
     # Dict storing final cumulative returns for each fund
     final_cumulative_returns = {}
-    for fund in funds.values():
+    color_map: Dict[str, str] = {}
+    for index, fund in enumerate(funds.values()):
         # Compute cumulative returns for each month
         months = [
             entry["month"] 
@@ -240,8 +245,11 @@ def plot_cumulative_returns(
         cumulative_returns = [0.0] + cumulative_returns
         # Update final_cumulative_returns
         final_cumulative_returns[fund.name] = cumulative_returns[-1]
-        # Get color for the fund
-        color = palettes.get(fund.name, DEFAULT_COLOR)
+        is_lead = (fund.name == lead_name)
+        fund_color = trace_config["color"]["lead"] if is_lead \
+            else trace_config["color"]["other"][index % len(trace_config["color"]["other"])]
+
+        color_map[fund.name] = fund_color 
         # Add trace for the fund
         fig.add_trace(
             go.Scatter(
@@ -252,7 +260,7 @@ def plot_cumulative_returns(
                 hovertemplate="<b>%{fullData.name}</b><br>%{y:.2%}<extra></extra>",
                 line=dict(
                     width=trace_config["line_width"]["lead"] if fund.name == lead_name else trace_config["line_width"]["other"], 
-                    color=color, 
+                    color=fund_color,
                     shape="spline", 
                     smoothing=0.6),
             )
@@ -289,7 +297,7 @@ def plot_cumulative_returns(
                     hoverinfo='skip',
                     marker=dict(
                         size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"],
-                        color=color,
+                        color=fund_color,
                         line=dict(width=1, color="white")
                 )
             )
@@ -301,7 +309,7 @@ def plot_cumulative_returns(
                 "lead": {"every_step": True, "final": True},
                 "others": {"every_step": False, "final": True}
             })
-            is_lead = (fund.name == lead_name)
+
 
             idxs = []
             if is_lead and rules["lead"].get("every_step", True):
@@ -320,7 +328,7 @@ def plot_cumulative_returns(
                     months,
                     cumulative_returns,
                     indices=sorted(set(idxs)),
-                    color=palettes.get(fund.name, DEFAULT_COLOR),
+                    color=color_map[fund.name],
                     fmt=value_box_cfg.get("format", "+.2%"),
                     boxcfg=value_box_cfg.get("box", {})
                 )
@@ -360,17 +368,20 @@ def plot_cumulative_returns(
 
     # --------------------------- Add annotation ---------------------------
     if layout_config["annotation"]["add_annotation"]:
-        # Initialise summary lines, a list storing all annotation strings
         summary_lines = []
-        # Add lead fund annotation as the first entry
+
+        # Lead (don't use fund.name here!)
         if lead_name in final_cumulative_returns:
-            fcr = final_cumulative_returns.pop(lead_name) # pop returns the value of the key and delete the key from the dict
-            summary_lines.append(f"<span style='color:{palettes.get(lead_name, DEFAULT_COLOR)};'><b>{lead_name}: {fcr:+.2%}</b></span>")
-        # Add other funds annotations
+            fcr = final_cumulative_returns.pop(lead_name)  # ok if you don't need it later
+            summary_lines.append(
+                f"<span style='color:{color_map[lead_name]};'><b>{lead_name}: {fcr:+.2%}</b></span>"
+            )
+
+        # Others (use k, not fund.name)
         summary_lines.append(
             " &nbsp; &nbsp; ".join(
                 [
-                    f"<b><span style='color:{palettes.get(k, DEFAULT_COLOR)};'>{k}</span>: {v:+.2%}</b>" 
+                    f"<b><span style='color:{color_map[k]};'>{k}</span>: {v:+.2%}</b>"
                     for k, v in final_cumulative_returns.items()
                 ]
             )
