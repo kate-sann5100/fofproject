@@ -4,11 +4,39 @@ import plotly.graph_objects as go
 from fofproject.fund import Fund
 import datetime as dt
 from dateutil.relativedelta import relativedelta
+from collections import defaultdict
 import numpy as np
 from fofproject.utils import hex_to_rgba
 from itertools import cycle
 
 DEFAULT_COLOR = "#D8C3A5"
+
+fund_name_map = {
+    "LEAD": {
+        "en": "Fund",
+        "cn": "基金"
+    },
+    "MSCI CHINA": {
+        "en": "MSCI China Index",
+        "cn": "MSCI 中国指数"
+    },
+    "MSCI WORLD": {
+        "en": "MSCI World Index",
+        "cn": "MSCI 世界指数"
+    },
+    "S&P 500": {
+        "en": "S&P 500 Index",
+        "cn": "标普500指数"
+    },
+    "TOPIX": {
+        "en": "TOPIX Index",
+        "cn": "東証株価指数"
+    },
+    "EUREKAHEDGE": {
+        "en": "Eurekahedge Hedge Fund Index",
+        "cn": "Eurekahedge 对冲基金指数"
+    # add more mappings here...
+}}
 
 STYLE_DICT = {
     "default": {
@@ -56,7 +84,7 @@ STYLE_DICT = {
             "color": {
                 "lead": "#2F2F2F",
                 "other": [
-                    "#8FC0A9",  # (light teal green)
+                    "#8FC0A9",  # light teal green
                     "#A8DADC",  # pale warm taupe
                     "#4A4E69",  # soft cream
                     "#6D6875",  # muted sandy tan
@@ -66,6 +94,7 @@ STYLE_DICT = {
                     "#3D405B"   # light almond
                 ]
             },
+            "Y-axis": True,
         },
         "markers": {
             "enabled": True   # 👈 markers every ~10% of the data points   
@@ -88,7 +117,6 @@ STYLE_DICT = {
         }
                 },
     "excel": {
-        # "palette": PALETTES["excel"],
         "layout_config": {
             "font": {
                 "family": "Microsoft Yahei Light, Roboto, sans-serif",
@@ -110,14 +138,14 @@ STYLE_DICT = {
                 "add_annotation": False, # True if we want to add an annotation
                 "position": {
                     "x": 0.5, # scale to the entire plot area
-                    "y": -0.13 # scale to the entire plot area
+                    "y": -0.18 # scale to the entire plot area
                 }
             },
             "legend": {
                 "orientation": "h", # "h" for horizontal, "v" for vertical
                 "position": {
                     "x": 0.5, # scale to the entire plot area
-                    "y": -0.12 # scale to the entire plot area
+                    "y": -0.17 # scale to the entire plot area
                 }
             },
         },
@@ -131,18 +159,19 @@ STYLE_DICT = {
                 "other": 2 # line width for the other funds
             },
             "color": {
-                "lead": "#2F2F2F",
+                "lead": "#C1AE94",
                 "other": [
-                    "#8FC0A9",  # (light teal green)
-                    "#A8DADC",  # pale warm taupe
-                    "#4A4E69",  # soft cream
-                    "#6D6875",  # muted sandy tan
-                    "#9A8C98",  # off-white with warmth
-                    "#E07A5F",  # light stone grey
-                    "#81B29A",  # pale oat
-                    "#3D405B"   # light almond
+                    "#DACEBF",  # (light teal green)
+                    "#989A9C",  # pale warm taupe
+                    "#B0AFAF",  # soft cream
+                    "#8CA3A0",  # muted sandy tan
+                    "#A59BA0",  # off-white with warmth
+                    "#7E8B92",  # light stone grey
+                    "#E3D8CC",  # pale oat
+                    "#C788A5"   # light almond
                 ]
             },
+            "Y-axis": False,
         },
         "markers": {
             "enabled": False   # 👈 no markers for excel style
@@ -189,8 +218,11 @@ def plot_cumulative_returns(
         start_month: str = None, # YYYY-MM
         end_month: str = None, # YYYY-MM
         style: str = "default",
-        language: str = "en"  # "en" or "cn"
+        language: str = "en",  # "en" or "cn"
+        blur: bool = False
     ):
+
+
 
     layout_config = STYLE_DICT.get(style, STYLE_DICT["default"])["layout_config"]
     trace_config = STYLE_DICT.get(style, STYLE_DICT["default"])["trace_config"]
@@ -213,6 +245,14 @@ def plot_cumulative_returns(
         raise ValueError("start_month must be <= end_month")
     # Get one month before start month
     prev_month = start_month - relativedelta(months=1) # get previous month
+    
+    # If style == excel, change the title
+    if style == "excel":
+        year = start_month.year
+        if language == "en":
+            title = f' Performance Since {year}'
+        elif language == "cn":
+            title = f' 自{year}年至今回报走势'
 
     # Identify lead fund
     lead_name = "RDGFF" if "RDGFF" in list(funds.keys()) else (list(funds.keys())[0])
@@ -224,6 +264,8 @@ def plot_cumulative_returns(
 
     # Dict storing final cumulative returns for each fund
     final_cumulative_returns = {}
+    value_box_tiers = defaultdict(int)   # index -> next tier number (0,1,2,...)
+    STACK_STEP_PX = 16    
     color_map: Dict[str, str] = {}
     for index, fund in enumerate(funds.values()):
         # Compute cumulative returns for each month
@@ -250,13 +292,23 @@ def plot_cumulative_returns(
             else trace_config["color"]["other"][index % len(trace_config["color"]["other"])]
 
         color_map[fund.name] = fund_color 
+
+        # If blur is True, only show the lead fund name as "Fund" or "基金"
+        if blur:
+            if fund.name == lead_name:
+                name = fund_name_map.get("LEAD", {}).get(language, fund.name)
+            else:
+                name = fund_name_map.get(fund.name, {}).get(language, fund.name)
+        else:
+            name = fund_name_map.get(fund.name, {}).get(language, fund.name)
+
         # Add trace for the fund
         fig.add_trace(
             go.Scatter(
                 x=months,
                 y=cumulative_returns,
                 mode="lines",
-                name=fund.name,
+                name=name,
                 hovertemplate="<b>%{fullData.name}</b><br>%{y:.2%}<extra></extra>",
                 line=dict(
                     width=trace_config["line_width"]["lead"] if fund.name == lead_name else trace_config["line_width"]["other"], 
@@ -319,26 +371,37 @@ def plot_cumulative_returns(
                 idxs.extend(box_indices)
             if (is_lead and rules["lead"].get("final", True)) or (not is_lead and rules["others"].get("final", True)):
                 last = len(months) - 1
+                if last not in idxs and idxs:
+                    idxs.pop()
                 if last not in idxs:
                     idxs.append(last)
+            if idxs:
+                for ix in sorted(set(idxs)):
+                    tier = value_box_tiers[ix]
+                    # build a per-index boxcfg that inherits the style, but adds a vertical offset
+                    per_index_boxcfg = dict(value_box_cfg.get("box", {}))
+                    # Prefer yshift (pixel space). You can also add small xshift if labels are wide.
+                    per_index_boxcfg.setdefault("yshift", 0)
+                    per_index_boxcfg["yshift"] += tier * STACK_STEP_PX
 
-            if idxs:  # draw
-                _add_value_boxes(
-                    fig,
-                    months,
-                    cumulative_returns,
-                    indices=sorted(set(idxs)),
-                    color=color_map[fund.name],
-                    fmt=value_box_cfg.get("format", "+.2%"),
-                    boxcfg=value_box_cfg.get("box", {})
-                )
+                    _add_value_boxes(
+                        fig,
+                        months,
+                        cumulative_returns,
+                        indices=[ix],  # draw this index only so we can control offsets per index
+                        color=color_map[fund.name],
+                        fmt=value_box_cfg.get("format", "+.2%"),
+                        boxcfg=per_index_boxcfg
+                    )
+
+                    value_box_tiers[ix] += 1
     # --------------------------- Set Layout ---------------------------
     fig.update_layout(
         title=dict(
             text=f"<b>{title}</b>", 
             font=dict(size=32), 
-            xanchor="left" if style == "excel" else "center", 
-            x=0.15 if style == "excel" else 0.5, 
+            xanchor="center", 
+            x=0.5, 
             yanchor="middle", 
             y=0.95
         ),
@@ -349,13 +412,13 @@ def plot_cumulative_returns(
             showgrid=True,
             gridcolor=layout_config["grid_color"],
             tickformat=layout_config["date_ticks"]["format"],
-            tickvals=[dt for dt in list(months)[::max(1, len(months)//6)]],
+            tickvals = [months[i] for i in box_indices],
             ticktext=[
-                dt.strftime(layout_config["date_ticks"]["format"]) 
-                for dt in list(months)[::max(1, len(months)//layout_config["date_ticks"]["num"])]
+                months[i].strftime(layout_config["date_ticks"]["format"])
+                for i in box_indices
             ],
         ),
-        yaxis=dict(title="Cumulative Return (%)", tickformat=".0%", zeroline=True),
+        yaxis=dict(title="Cumulative Return (%)" if trace_config['Y-axis'] is True else None, tickformat=".0%", zeroline=True),
         legend=dict(
             orientation=layout_config["legend"]["orientation"],
             yanchor="middle",

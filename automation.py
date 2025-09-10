@@ -67,6 +67,7 @@ def presentation_data_update(month:str):
             end_month=month,
             style="excel",
             language="en",
+            blur=True
         )
 
 presentation_data_update("2025-06")

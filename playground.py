@@ -6,10 +6,13 @@ from src.fofproject.mvo import minimum_variance_analysis
 
 # Initialize and load data
 funds = input_monthly_returns(r"RETURN DATA.csv", performance_fee=0.2, management_fee=0.01)
-funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'FOREST', 'LIM','3W GLOBAL','HAO','TIMEFOLIO','JH BIOTECH'])
-start_month = "2020-1"
+funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA'])
+start_month = "2018-1"
 end_month = "2025-6"
 
+# Excel title
+year = start_month.split("-")[0]
+title = f' Performance Since {year}'
 
 # print(funds['RDGFF'].annualized_return(funds['RDGFF'].inception_date, end_month))
 # print(funds['RDGFF'].sortino_ratio(funds['RDGFF'].inception_date, end_month))
@@ -27,11 +30,12 @@ end_month = "2025-6"
 # Cumulative returns
 fig = plot_cumulative_returns(
     funds=funds_to_be_plot,
-    title="Cumulative Returns",
+    title=title,
     start_month=start_month,
     end_month=end_month,
-    style="default",
-    language="en"
+    style="excel",
+    language="en",
+    blur=True
 )
 # for name, fund in funds.items():
 #     print(f"Running function for {name}")
