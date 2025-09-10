@@ -70,4 +70,4 @@ def presentation_data_update(month:str):
             blur=True
         )
 
-presentation_data_update("2025-06")
+presentation_data_update("2025-07")

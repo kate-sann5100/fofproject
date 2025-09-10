@@ -13,7 +13,6 @@ import plotly.graph_objects as go
 def minimum_variance_analysis(
     funds: dict,
     *,
-    fund_subset: list[str] | None = None,   # choose a subset of fund names; None = use all
     long_only: bool = True,                 # long-only (projected GD) or allow shorts (closed-form)
     min_common_months: int = 12,            # require at least this many shared months across chosen funds
     annualization: int = 12,                # 12 for monthly data
@@ -37,7 +36,7 @@ def minimum_variance_analysis(
         {'n_months', 'ann_vol', 'ann_ret', 'cov', 'mu', 'used_returns'}
     """
     # ---------- assemble wide table of returns ----------
-    names = fund_subset if fund_subset is not None else list(funds.keys())
+    names = list(funds.keys())
     if not names:
         raise ValueError("No funds provided.")
 

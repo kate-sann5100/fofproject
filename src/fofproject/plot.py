@@ -85,13 +85,10 @@ STYLE_DICT = {
                 "lead": "#2F2F2F",
                 "other": [
                     "#8FC0A9",  # light teal green
-                    "#A8DADC",  # pale warm taupe
-                    "#4A4E69",  # soft cream
-                    "#6D6875",  # muted sandy tan
+                    "#A8DADC",  # pale warm taup
                     "#9A8C98",  # off-white with warmth
                     "#E07A5F",  # light stone grey
                     "#81B29A",  # pale oat
-                    "#3D405B"   # light almond
                 ]
             },
             "Y-axis": True,
@@ -116,6 +113,90 @@ STYLE_DICT = {
             }
         }
                 },
+    "modern_dark": {
+        "layout_config": {
+            "font": {
+                "family": "Inter, Montserrat, system-ui, sans-serif",
+                "size": 13,
+                "color": "#1f2937"
+            },
+            "margin": {
+                "l": 56,
+                "r": 16,
+                "t": 56,
+                "b": 80
+            },
+            "background": {
+                "paper": "#ffffff",
+                "plot": "#fcfcfd"
+            },
+            "grid_color": "#efefef",
+            "date_ticks": {
+                "num": 8,
+                "format": "%b ’%y"
+            },
+            "annotation": {
+            "add_annotation": False,
+            "position": {
+                "x": 0.5,
+                "y": 1.12
+            },
+            "style": {
+                "font_size": 14,
+                "font_color": "#374151"
+            }
+            },
+            "legend": {
+            "orientation": "h",
+            "position": {
+                "x": 1.0,
+                "y": 1.15
+            },
+            "anchor": "right"     
+            }
+        },
+        "trace_config": {
+            "mark_size": {
+                "lead": 10,
+                "other": 6
+            },
+            "line_width": {
+                "lead": 2.5,
+                "other": 1.8
+            },
+            "color": {
+            "lead": "#0E7CFF",
+            "other": [
+                "#8B5CF6", 
+                "#10B981",  
+                "#F59E0B",  
+                "#EF4444", 
+                "#14B8A6" 
+            ]
+            },
+            "Y-axis": True
+        },
+        "markers": {
+            "enabled": True
+        },
+        "value_boxes": {
+            "enabled": True,
+            "format": "+.1%",
+            "box": {
+                "bgcolor": "rgba(15,23,42,0.75)",
+                "borderwidth": 0,
+                "font_size": 11,
+                "font_color": "#F8FAFC",
+                "xshift": 5,
+                "yshift": 5,
+                "pad": 4
+            },
+            "rules": {
+            "lead":   { "every_step": False, "final": True },
+            "others": { "every_step": False, "final": True }
+            }
+        }
+        },
     "excel": {
         "layout_config": {
             "font": {
@@ -312,7 +393,7 @@ def plot_cumulative_returns(
                 hovertemplate="<b>%{fullData.name}</b><br>%{y:.2%}<extra></extra>",
                 line=dict(
                     width=trace_config["line_width"]["lead"] if fund.name == lead_name else trace_config["line_width"]["other"], 
-                    color=fund_color,
+                    color=color_map[fund.name],
                     shape="spline", 
                     smoothing=0.6),
             )
@@ -349,7 +430,7 @@ def plot_cumulative_returns(
                     hoverinfo='skip',
                     marker=dict(
                         size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"],
-                        color=fund_color,
+                        color=color_map[fund.name],
                         line=dict(width=1, color="white")
                 )
             )
