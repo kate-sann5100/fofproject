@@ -18,9 +18,8 @@ end_month = "2070-8"
 #         f"sharpe during the period {funds[name].sharpe_ratio('2020-05', end_month):.2f}"
 #     )
 
-print(funds['RDGFF'].beta_to(funds['MSCI CHINA'], '2000-1', end_month))
-print(funds['RDGFF'].correlation_to(funds['MSCI CHINA'], '2000-1', end_month))
-
+funds['RDGFF'].plot_monthly_return_distribution()
+funds["RDGFF"].export_monthly_table()
 # Correlation heatmap
 # fig, corr_df, overlap_df = plot_fund_correlation_heatmap(funds_to_be_plot, method="pearson", min_overlap=12)
 # fig.show()

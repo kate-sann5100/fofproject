@@ -719,3 +719,55 @@ class Fund:
 
         fig.show()
         return fig
+
+    def export_monthly_table(self):
+        """
+        Export a Plotly table of monthly + YTD returns to an interactive HTML file.
+        """
+        filename="monthly_returns_table.html"
+        df = pd.DataFrame(self.monthly_returns)
+        date_col = "month" if "month" in df.columns else "datetime"
+        df["date"] = pd.to_datetime(df[date_col])
+        df["year"] = df["date"].dt.year
+        df["month_num"] = df["date"].dt.month
+
+        month_labels = ["Jan","Feb","Mar","Apr","May","Jun",
+                        "Jul","Aug","Sep","Oct","Nov","Dec"]
+
+        pivot = (
+            df.pivot_table(index="year", columns="month_num", values="value", aggfunc="last")
+              .reindex(columns=range(1, 13))
+              .sort_index(ascending=False)
+        )
+        ytd = (pivot.add(1).prod(axis=1, skipna=True) - 1)
+        pivot["YTD"] = ytd
+
+        # format values
+        def pct_str(x):
+            return f"{x*100:,.2f}%" if pd.notna(x) else ""
+
+        display_cols = month_labels + ["YTD"]
+        pivot.columns = month_labels + ["YTD"]
+        pivot = pivot[display_cols]
+        pivot_str = pivot.applymap(pct_str)
+        pivot_str.insert(0, "Year", pivot_str.index.astype(str))
+
+        header_values = ["Year"] + display_cols
+        fig = go.Figure(
+            data=[go.Table(
+                columnwidth=[50] + [55]*13,
+                header=dict(values=header_values,
+                            fill_color="#cbb69d",
+                            align="center",
+                            font=dict(color="black", size=12),
+                            height=30),
+                cells=dict(values=[pivot_str[col].tolist() for col in pivot_str.columns],
+                           fill_color="#f0f0f0",
+                           font=dict(color="black", size=12),
+                           align="center",
+                           height=28)
+            )]
+        )
+        fig.update_layout(margin=dict(l=20, r=20, t=20, b=20), template="plotly_white")
+        fig.show()
+        return fig
