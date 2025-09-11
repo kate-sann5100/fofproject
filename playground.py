@@ -9,17 +9,17 @@ funds = input_monthly_returns(r"RETURN DATA.csv", performance_fee=0.2, managemen
 # funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA'])
 funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA', 'HAO','TAIREN', 'LEXINGTON', 'LIM','FOREST'])
 start_month = "2017-1"
-end_month = "2070-8"
+end_month = "2020-8"
 
-# for name, fund in funds_to_be_plot.items():
-#     print(
-#         f"Fund: {name}, return during the period {funds[name].annualized_return('2020-05', end_month):.2f}, "
-#         f"volatility during the period {funds[name].volatility('2020-05', end_month):.2f}, "
-#         f"sharpe during the period {funds[name].sharpe_ratio('2020-05', end_month):.2f}"
-#     )
+for name, fund in funds_to_be_plot.items():
+    print(
+        f"Fund: {name}, return during the period {funds[name].annualized_return('2020-05', end_month):.2f}, "
+        f"volatility during the period {funds[name].volatility('2020-05', end_month):.2f}, "
+        f"sharpe during the period {funds[name].sharpe_ratio('2020-05', end_month):.2f}"
+    )
 
-funds['RDGFF'].plot_monthly_return_distribution()
-funds["RDGFF"].export_monthly_table()
+# funds['RDGFF'].plot_monthly_return_distribution()
+# funds["RDGFF"].export_monthly_table()
 # Correlation heatmap
 # fig, corr_df, overlap_df = plot_fund_correlation_heatmap(funds_to_be_plot, method="pearson", min_overlap=12)
 # fig.show()
