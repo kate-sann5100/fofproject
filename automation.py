@@ -35,11 +35,12 @@ def presentation_data_update(month:str):
     print("========== Portfolio holdings =============")
     print("Appendix of our portfolio performance:")
     for name in ['HAO','TAIREN', 'LEXINGTON', 'LIM','FOREST']:
-        print(f"{month} return of {name}: {funds[name].get_monthly_return(year, specific_month)}")    
+        print(f"return of {name}: {funds[name].get_monthly_return(year, specific_month)}")    
         print(f"Annualized return of {name}: {funds[name].annualized_return(funds[name].inception_date, end_month)}")
         print(f"Volatility of {name}: {funds[name].volatility(funds[name].inception_date, end_month)}")
         print(f"Sharpe ratio of {name}: {funds[name].sharpe_ratio(funds[name].inception_date, end_month)}")
         print(f"Sortino ratio of {name}: {funds[name].sortino_ratio(funds[name].inception_date, end_month)}")
+        print(f"YTD return of {name}: {funds[name].cumulative_return(january, end_month)}")
 
     # Define the sets to plot (first item is the primary fund)
     list_of_plots = [
