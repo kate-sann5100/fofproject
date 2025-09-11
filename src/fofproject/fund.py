@@ -417,6 +417,40 @@ class Fund:
 
         return total_rtn/count if count > 0 else 0.0
     
+    def join_two_funds(self, benchmark_fund, start_month=None, end_month=None):
+
+        fund1 = self.monthly_returns   # market returns
+        fund2 = benchmark_fund.monthly_returns   # stock returns
+
+        req_start = parse_month(start_month)
+        req_end   = parse_month(end_month)
+
+        # gather available months
+        f1_months = [e['month'] for e in fund1]
+        f2_months = [e['month'] for e in fund2]
+
+        earliest_common_start = max(min(f1_months), min(f2_months))
+        latest_common_end = min(max(f1_months), max(f2_months))
+        # final clamped range (also respect the user’s requested window)
+        adj_start = max(req_start, earliest_common_start)
+        adj_end   = min(req_end,   latest_common_end)
+
+        if adj_start > adj_end:
+            return [], [], (adj_start, adj_end)  # or raise, depending on your needs
+
+        fund1_values = [
+            entry['value']
+            for entry in fund1
+            if adj_start <= entry['month'] <= adj_end
+        ]
+
+        fund2_values = [
+            entry['value']
+            for entry in fund2
+            if adj_start <= entry['month'] <= adj_end
+        ]
+        return fund1_values, fund2_values
+    
     def correlation_to(self, benchmark_fund, start_month=None, end_month=None):
         """_summary_
 
@@ -426,18 +460,15 @@ class Fund:
             end_month (_type_): _description_
         """
         # Example: list1 and list2 are your two lists
-        df1 = list_of_dicts_to_df(self.monthly_returns, "value1")
-        df2 = list_of_dicts_to_df(benchmark_fund.monthly_returns, "value2")
+        fund1_values, fund2_values = self.join_two_funds(benchmark_fund=benchmark_fund, start_month=start_month, end_month=end_month)
+        arr1 = np.array(fund1_values)
+        arr2 = np.array(fund2_values)
 
-        # Merge on 'month' to align them
-        merged = pd.merge(df1, df2, on="month", how="inner")
-        merged.dropna
-        if start_month == None and end_month == None:
-            filtered = merged
-        else: 
-            filtered = merged[(merged["month"] >= parse_month(start_month)) & (merged["month"] <= parse_month(end_month))]
-        # Compute correlation
-        corr = filtered["value1"].corr(filtered["value2"])
+        # correlation matrix
+        corr_matrix = np.corrcoef(arr1, arr2)
+
+        # extract the correlation coefficient
+        corr = corr_matrix[0, 1]
         return corr
 
     def beta_to(self, benchmark_fund, start_month=None, end_month=None):
@@ -459,9 +490,18 @@ class Fund:
             Beta of this fund relative to the benchmark fund.
             Returns None if insufficient data.
         """
+               # Example: assume you already have two lists of dicts
+        fund1_values, fund2_values = self.join_two_funds(benchmark_fund=benchmark_fund, start_month=start_month, end_month=end_month)
 
-        covariance = self.total_vol * benchmark_fund.total_vol  * self.correlation_to(benchmark_fund,start_month=start_month,end_month=end_month)
-        beta = covariance / (benchmark_fund.total_vol **2)
+        # Combine into 2D numpy array (rows = months, columns = funds)
+        np_array = np.column_stack([fund1_values, fund2_values])
+
+        # Now you can access
+        m = np_array[:, 1]   # fund 1 (market returns)
+        s = np_array[:, 0]   # fund 2 (stock returns)
+        covariance = np.cov(s,m) # Calculate covariance between stock and market
+        beta = covariance[0,1]/covariance[1,1]
+
         return beta
 
     def plot_monthly_return_distribution(

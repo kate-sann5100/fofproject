@@ -8,30 +8,32 @@ from src.fofproject.mvo import minimum_variance_analysis
 funds = input_monthly_returns(r"RETURN DATA.csv", performance_fee=0.2, management_fee=0.01)
 # funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA'])
 funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA', 'HAO','TAIREN', 'LEXINGTON', 'LIM','FOREST'])
-start_month = "2018-1"
-end_month = "2025-6"
+start_month = "2017-1"
+end_month = "2070-8"
 
-for name, fund in funds_to_be_plot.items():
-    print(
-        f"Fund: {name}, return during the period {funds[name].annualized_return('2020-05', end_month):.2f}, "
-        f"volatility during the period {funds[name].volatility('2020-05', end_month):.2f}, "
-        f"sharpe during the period {funds[name].sharpe_ratio('2020-05', end_month):.2f}"
-    )
+# for name, fund in funds_to_be_plot.items():
+#     print(
+#         f"Fund: {name}, return during the period {funds[name].annualized_return('2020-05', end_month):.2f}, "
+#         f"volatility during the period {funds[name].volatility('2020-05', end_month):.2f}, "
+#         f"sharpe during the period {funds[name].sharpe_ratio('2020-05', end_month):.2f}"
+#     )
 
+print(funds['RDGFF'].beta_to(funds['MSCI CHINA'], '2000-1', end_month))
+print(funds['RDGFF'].correlation_to(funds['MSCI CHINA'], '2000-1', end_month))
 
 # Correlation heatmap
-fig, corr_df, overlap_df = plot_fund_correlation_heatmap(funds_to_be_plot, method="pearson", min_overlap=12)
-fig.show()
+# fig, corr_df, overlap_df = plot_fund_correlation_heatmap(funds_to_be_plot, method="pearson", min_overlap=12)
+# fig.show()
 
-# 基金回报历史走势
+# # 基金回报历史走势
 
-# MVO analysis
-fig, w, stats = minimum_variance_analysis(
-    funds=funds_to_be_plot,
-    long_only=True,
-    min_common_months=36,
-    title="GMV (Long-only, ≥36 common months)"
-)
+# # MVO analysis
+# fig, w, stats = minimum_variance_analysis(
+#     funds=funds_to_be_plot,
+#     long_only=True,
+#     min_common_months=36,
+#     title="GMV (Long-only, ≥36 common months)"
+# )
 
 # # Cumulative returns
 # fig = plot_cumulative_returns(
