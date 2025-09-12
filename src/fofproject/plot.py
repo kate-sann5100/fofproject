@@ -300,7 +300,8 @@ def plot_cumulative_returns(
         end_month: str = None, # YYYY-MM
         style: str = "default",
         language: str = "en",  # "en" or "cn"
-        blur: bool = False
+        blur: bool = False,
+        aspect_lock = False
     ):
 
 
@@ -477,6 +478,7 @@ def plot_cumulative_returns(
 
                     value_box_tiers[ix] += 1
     # --------------------------- Set Layout ---------------------------
+
     fig.update_layout(
         title=dict(
             text=f"<b>{title}</b>", 
@@ -509,6 +511,22 @@ def plot_cumulative_returns(
         ),
         hovermode="x unified",
     )
+    if aspect_lock == True:
+        ASPECT_W, ASPECT_H = 13.5, 6
+        WIDTH = 1280
+        HEIGHT = int(WIDTH * ASPECT_H / ASPECT_W)
+        fig.update_layout(width=WIDTH, height=HEIGHT)
+        config = dict(
+            responsive=False,  # prevents auto-resizing that would change aspect
+            toImageButtonOptions=dict(
+                format="png",            # or "svg", "jpeg", "webp"
+                filename="cumulative_returns",
+                width=WIDTH,
+                height=HEIGHT,
+                scale=2,                 # 2x DPI
+            ),
+            displaylogo=False
+        )
 
     # --------------------------- Add annotation ---------------------------
     if layout_config["annotation"]["add_annotation"]:

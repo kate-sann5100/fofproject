@@ -805,9 +805,9 @@ class Fund:
         # Base heights (px). With more rows, reduce height so tables don't get huge.
         base_cell_height = 28
         base_header_height = 30
-        if num_rows > 15:
+        if num_rows > 10:
             # Scale down height roughly inversely with row count (cap at 14px)
-            scale = 15 / num_rows
+            scale = 10 / num_rows
             base_cell_height = max(14, int(base_cell_height * scale))
             base_header_height = max(16, int(base_header_height * scale))
 
@@ -848,7 +848,7 @@ class Fund:
         fig.show()
         return fig
             
-    def export_key_metrics_table(self, end_month, benchmark_fund=None, language="en", metrics=None, horizontal: bool = False):
+    def export_key_metrics_table(self, end_month, benchmark_fund=None, language="en", metrics=None, horizontal: bool = False, fix_aspect: bool = False):
 
         header_fill = "#cbb69d"
         cell_fill = "#f0f0f0"
@@ -861,13 +861,14 @@ class Fund:
             "en": {
                 "metric": "Metric",
                 "value": "Value",
-                "cagr": "CAGR",
-                "vol": "Volatility (Ann.)",
+                "cagr": "Annualized Return",
+                "vol": "Volatility",
                 "sharpe": "Sharpe Ratio",
                 "sortino": "Sortino Ratio",
+                "cum": "Cumulative Return",
                 "mdd": "Max Drawdown",
-                "beta": f'Beta to {benchmark_fund}',
-                "corr": "Correlation (vs. Benchmark)",
+                "beta": f'Beta to {benchmark_fund.name}',
+                "corr": f"Correlation (vs. {benchmark_fund.name})",
                 "win": "Win Rate (Monthly)",
                 "best": "Best Month",
                 "worst": "Worst Month",
@@ -880,12 +881,13 @@ class Fund:
                 "metric": "指标",
                 "value": "数值",
                 "cagr": "年复合增长率 (CAGR)",
-                "vol": "波动率（年化）",
+                "vol": "波动率",
                 "sharpe": "夏普比率",
                 "sortino": "索提诺比率",
+                "cum": "累計增长率",
                 "mdd": "最大回撤",
-                "beta": f"贝塔({benchmark_fund})",
-                "corr": "相关性（基准）",
+                "beta": f"贝塔({benchmark_fund.name})",
+                "corr": f"相关性（{benchmark_fund.name}）",
                 "win": "月度胜率",
                 "best": "最佳月份",
                 "worst": "最差月份",
@@ -898,14 +900,19 @@ class Fund:
         L = labels["en"] if language not in labels else labels[language]
 
         placeholder_values = {
-            "cagr": self.annualized_return(self.inception_date, end_month), 
-            "vol": self.volatility(self.inception_date, end_month), 
-            "sharpe": self.sharpe_ratio(self.inception_date,end_month), 
-            "sortino":  self.sortino_ratio(self.inception_date,end_month),
-            "mdd": self.max_drawdown(self.inception_date, end_month), 
-            "beta": self.beta_to(benchmark_fund, self.inception_date, end_month), 
-            "corr": "0.28", 
-            "win": "58%",
+            # Percentages
+            "cagr": f"{100 * self.annualized_return(self.inception_date, end_month):.1f}%",
+            "vol": f"{100 * self.volatility(self.inception_date, end_month):.1f}%",
+            "mdd": f"{100 * self.max_drawdown(self.inception_date, end_month):.1f}%",
+            "cum": f"{100 * self.cumulative_return(self.inception_date, end_month):.1f}%",
+            "win": f"{100 * self.positive_months(self.inception_date, end_month):.1f}%",
+            
+            # Ratios
+            "sharpe": f"{self.sharpe_ratio(self.inception_date, end_month):.2f}",
+            "sortino": f"{self.sortino_ratio(self.inception_date, end_month):.2f}",
+            "beta": f"{self.beta_to(benchmark_fund, self.inception_date, end_month):.2f}",
+            "corr": f"{self.correlation_to(benchmark_fund, self.inception_date, end_month):.2f}",
+            "win": f"{self.positive_months(self.inception_date, end_month)*100:.2f}%",
             "best": "[placeholder]", 
             "worst":"[placeholder]", 
             "aum": "[placeholder]", 
@@ -930,21 +937,22 @@ class Fund:
 
         px_per_char = 7.5
 
-        if not horizontal:
-            metric_width = max(120, int(px_per_char * max(len(s) for s in metric_labels)) + 20)
-            value_width  = max(100, int(px_per_char * max(len(s) for s in metric_values)) + 20)
-            n_rows = len(metric_labels)
-            base_cell_h, base_header_h = 28, 32
-            if n_rows > 12:
-                scale = 12 / n_rows
-                base_cell_h = max(16, int(base_cell_h * scale))
-                base_header_h = max(18, int(base_header_h * scale))
-            ratio_num, ratio_den = 10, 26
-            min_col_width = min(metric_width, value_width)
-            max_h = int(min_col_width * ratio_num / ratio_den)
-            cell_h = max(14, min(base_cell_h, max_h))
-            header_h = max(16, min(base_header_h, max_h))
+        metric_width = max(120, int(px_per_char * max(len(str(s)) for s in metric_labels)) + 20)
+        value_width  = max(100, int(px_per_char * max(len(str(s)) for s in metric_values)) + 20)
+        n_rows = len(metric_labels)
+        base_cell_h, base_header_h = 28, 32
+        if n_rows > 12:
+            scale = 12 / n_rows
+            base_cell_h = max(16, int(base_cell_h * scale))
+            base_header_h = max(18, int(base_header_h * scale))
+        ratio_num, ratio_den = 10, 26
+        min_col_width = min(metric_width, value_width)
+        max_h = int(min_col_width * ratio_num / ratio_den)
+        cell_h = max(14, min(base_cell_h, max_h))
+        header_h = max(16, min(base_header_h, max_h))
 
+
+        if not horizontal:
             fig = go.Figure(data=[go.Table(
                 columnwidth=[metric_width, value_width],
                 header=dict(values=[L["metric"], L["value"]],
@@ -954,19 +962,22 @@ class Fund:
                         fill_color=cell_fill, align="left",
                         font=settings[language]["font"], height=cell_h),
             )])
+            total_table_width = metric_width + value_width
+            n_rows_rendered = n_rows + 1  # header + rows
         else:
             # --- FIXED: one list per column (each with a single value) ---
             col_widths = []
             for lab, val in zip(metric_labels, metric_values):
                 w = max(len(lab), len(val))
                 col_widths.append(max(90, int(px_per_char * w) + 16))
-
-            header_h, cell_h = 36, 32
+            total_table_width = sum(col_widths)
+            n_rows_rendered = 2  # header + one value row
 
             fig = go.Figure(data=[go.Table(
                 columnwidth=col_widths,
                 header=dict(
                     values=metric_labels,
+                    # bold=True,
                     fill_color=header_fill,
                     align=["center"] * len(metric_labels),
                     font=settings[language]["font"],
@@ -982,10 +993,29 @@ class Fund:
                 ),
             )])
 
+        margins = dict(l=20, r=20, t=20, b=20)
         fig.update_layout(
-            margin=dict(l=20, r=20, t=20, b=20),
+            margin=margins,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
         )
+        if fix_aspect:
+        # Height:Width = aspect_ratio (H:W)
+            ar_h, ar_w = (10, 50)
+            # Derive canvas width from table width plus margins
+            canvas_width = int(total_table_width + margins["l"] + margins["r"])
+            canvas_height = int(canvas_width * (ar_h / ar_w))
+            fig.update_layout(width=canvas_width, height=canvas_height)
+        else:
+            # Let Plotly auto-size width; set a sensible height from row count
+            auto_height = int(margins["t"] + margins["b"] + header_h + cell_h * (n_rows_rendered - 1) + 8)
+            fig.update_layout(height=auto_height)
+
         fig.show()
         return fig
+
+    def summary_of_a_fund(self, benchmark_fund=None, language="en"):
+        plot1 = self.export_monthly_table(language)
+        plot2 = self.export_key_metrics_table(benchmark_fund=benchmark_fund, end_month=self.latest_date, language=language,metrics=["cagr","vol","sharpe","sortino","mdd","beta","corr","win"],horizontal=False)
+        plot3 = self.plot_monthly_return_distribution()
+        return plot1, plot2, plot3

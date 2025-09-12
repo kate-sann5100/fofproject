@@ -8,19 +8,68 @@ from src.fofproject.mvo import minimum_variance_analysis
 funds = input_monthly_returns(r"RETURN DATA.csv", performance_fee=0.2, management_fee=0.01)
 # funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA'])
 funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA', 'HAO','TAIREN', 'LEXINGTON', 'LIM','FOREST'])
-start_month = "2017-1"
-end_month = "2020-8"
-
-for name, fund in funds_to_be_plot.items():
-    print(
-        f"Fund: {name}, return during the period {funds[name].annualized_return('2020-05', end_month):.2f}, "
-        f"volatility during the period {funds[name].volatility('2020-05', end_month):.2f}, "
-        f"sharpe during the period {funds[name].sharpe_ratio('2020-05', end_month):.2f}"
-    )
+start_month = "2000-1"
+end_month = "2025-7"
 
 # funds['RDGFF'].plot_monthly_return_distribution()
 # funds["LEXINGTON"].export_monthly_table(language ="cn")
-funds['HAO'].export_key_metrics_table(language ="cn", end_month=end_month, benchmark_fund = funds["MSCI CHINA"], metrics = ["vol","sharpe","sortino","mdd","beta"],horizontal = False)
+funds['HAO'].summary_of_a_fund(funds['MSCI CHINA'],language="en")
+
+
+# for name, fund in funds_to_be_plot.items():
+#     print(
+#         f"Fund: {name}, return during the period {funds[name].annualized_return('2020-05', end_month):.2f}, "
+#         f"volatility during the period {funds[name].volatility('2020-05', end_month):.2f}, "
+#         f"sharpe during the period {funds[name].sharpe_ratio('2020-05', end_month):.2f}"
+#     )
+
+# list_of_plots = [
+#     ['RDGFF', 'EUREKAHEDGE', 'MSCI CHINA'],
+#     ['HAO', 'MSCI CHINA'],
+#     ['TAIREN', 'MSCI CHINA', 'MSCI WORLD'],
+#     ['LEXINGTON', 'MSCI WORLD', 'S&P 500'],
+#     ['LIM', 'EUREKAHEDGE', 'TOPIX'],
+#     ['FOREST', 'EUREKAHEDGE'],
+# ]
+
+# funds['HAO'].export_key_metrics_table(language ="en", end_month=end_month, benchmark_fund = funds["MSCI CHINA"], metrics = ["cagr","vol","sharpe","sortino","beta"],horizontal = True)
+
+
+# for names in list_of_plots:
+#     # Optional: skip if any required series are missing
+#     missing = [n for n in names if n not in funds]
+#     if missing:
+#         print(f"Skipping {names}: missing {missing} in `funds`.")
+#         continue
+    # for years_to_plot in ['2018','2020','2022']:
+    #     if years_to_plot =='2022': 
+    #         end_month="2022-12"
+    #         start_month="2022-1" 
+
+    #     elif years_to_plot =='2020': 
+    #         end_month="2020-12"
+    #         start_month="2020-1" 
+
+    #     elif years_to_plot =='2018': 
+    #         end_month="2018-12"
+    #         start_month="2018-1" 
+
+            # print(f"Generating cumulative return plot for {', '.join(names)} in {years_to_plot}...")
+
+    # plot = plot_cumulative_returns(
+    #     funds=subset_of_funds(funds, names),   # subset based on this group
+    #     title=f"Performance Since Inception",
+    #     start_month=start_month,
+    #     end_month=end_month,
+    #     style="excel",
+    #     language="en",
+    #     blur=True,
+    #     aspect_lock=True
+    #     )
+
+
+
+
 # Correlation heatmap
 # fig, corr_df, overlap_df = plot_fund_correlation_heatmap(funds_to_be_plot, method="pearson", min_overlap=12)
 # fig.show()
