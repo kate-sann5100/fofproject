@@ -720,19 +720,47 @@ class Fund:
         fig.show()
         return fig
 
-    def export_monthly_table(self):
+    def export_monthly_table(self, language="en"):
         """
         Export a Plotly table of monthly + YTD returns to an interactive HTML file.
         """
-        filename="monthly_returns_table.html"
         df = pd.DataFrame(self.monthly_returns)
         date_col = "month" if "month" in df.columns else "datetime"
         df["date"] = pd.to_datetime(df[date_col])
         df["year"] = df["date"].dt.year
         df["month_num"] = df["date"].dt.month
 
-        month_labels = ["Jan","Feb","Mar","Apr","May","Jun",
-                        "Jul","Aug","Sep","Oct","Nov","Dec"]
+        month_labels = {"en":["Jan","Feb","Mar","Apr","May","Jun",
+                        "Jul","Aug","Sep","Oct","Nov","Dec"],
+                        "cn": ["1月","2月","3月","4月","5月","6月",
+                        "7月","8月","9月","10月","11月","12月"]}
+        other_labels = {
+                    "en": {
+                        'ytd_label': "YTD",
+                        'year': "Year",
+                    },
+                    "cn": {
+                        'ytd_label': "年初至今",
+                        'year': "年分",
+                    }
+                }
+        settings = {
+                "en": {
+                    'font': dict(family="Roboto", color="black", size=12),
+                },
+                "cn": {
+                    'font': dict(family="Roboto", color="black", size=12),  
+                }
+            }
+
+        if language == "en":
+            table_labels = month_labels['en']
+            ytd_label = other_labels['en']['ytd_label']
+            year_label = other_labels['en']['year']
+        elif language == "cn":
+            table_labels = month_labels['cn']
+            ytd_label = other_labels['cn']['ytd_label']
+            year_label = other_labels['cn']['year']
 
         pivot = (
             df.pivot_table(index="year", columns="month_num", values="value", aggfunc="last")
@@ -746,28 +774,218 @@ class Fund:
         def pct_str(x):
             return f"{x*100:,.2f}%" if pd.notna(x) else ""
 
-        display_cols = month_labels + ["YTD"]
-        pivot.columns = month_labels + ["YTD"]
+        display_cols = table_labels + [ytd_label]
+        pivot.columns = table_labels + [ytd_label]
         pivot = pivot[display_cols]
         pivot_str = pivot.applymap(pct_str)
-        pivot_str.insert(0, "Year", pivot_str.index.astype(str))
+        pivot_str.insert(0, year_label, pivot_str.index.astype(str))
+        header_values = [year_label] + display_cols
+        # ---------------
+        num_rows = pivot_str.shape[0]
+        num_cols = len(header_values)  # 14 (Year + 12 months + YTD)    
+        
+        px_per_char = 7.5
+        month_label_width = max(52, int(px_per_char * max(len(lbl) for lbl in display_cols)))
+        year_col_width   = max(64, int(px_per_char * len(year_label) + 10))
 
-        header_values = ["Year"] + display_cols
+        # Optional: if values are long (e.g., many digits), widen month cells slightly
+        # Look at a sample of formatted values to estimate content length
+        try:
+            sample_vals = pd.Series(
+                [v for col in display_cols for v in pivot_str[col].head(5)]
+            )
+            max_val_chars = min(12, max((len(s) for s in sample_vals if isinstance(s, str)), default=6))
+            month_label_width = max(month_label_width, int(px_per_char * max_val_chars) + 20)
+        except Exception:
+            pass
+
+        # Compose column widths: first (year) + uniform month/YTD widths
+        columnwidths = [year_col_width] + [month_label_width] * (num_cols - 1)
+
+        # Base heights (px). With more rows, reduce height so tables don't get huge.
+        base_cell_height = 28
+        base_header_height = 30
+        if num_rows > 15:
+            # Scale down height roughly inversely with row count (cap at 14px)
+            scale = 15 / num_rows
+            base_cell_height = max(14, int(base_cell_height * scale))
+            base_header_height = max(16, int(base_header_height * scale))
+
+        # Enforce height:width ratio <= 10:26 (≈0.3846) using the NARROWEST column
+        ratio_num, ratio_den = 10, 26
+        min_col_width = min(columnwidths)
+        max_allowed_height = int(min_col_width * ratio_num / ratio_den)
+
+        cells_height = min(base_cell_height, max_allowed_height)
+        header_height = min(base_header_height, max_allowed_height)
+
+        # Safety: ensure at least 12px for legibility
+        cells_height = max(12, cells_height)
+        header_height = max(14, header_height)
+
+        # ----------------------
+
         fig = go.Figure(
             data=[go.Table(
                 columnwidth=[50] + [55]*13,
                 header=dict(values=header_values,
                             fill_color="#cbb69d",
                             align="center",
-                            font=dict(color="black", size=12),
+                            font=settings[language]['font'],
                             height=30),
                 cells=dict(values=[pivot_str[col].tolist() for col in pivot_str.columns],
                            fill_color="#f0f0f0",
-                           font=dict(color="black", size=12),
+                           font=settings[language]['font'],
                            align="center",
                            height=28)
             )]
         )
-        fig.update_layout(margin=dict(l=20, r=20, t=20, b=20), template="plotly_white")
+        fig.update_layout(
+            margin=dict(l=20, r=20, t=20, b=20),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+        fig.show()
+        return fig
+            
+    def export_key_metrics_table(self, end_month, benchmark_fund=None, language="en", metrics=None, horizontal: bool = False):
+
+        header_fill = "#cbb69d"
+        cell_fill = "#f0f0f0"
+        settings = {
+            "en": {"font": dict(family="Roboto", color="black", size=12)},
+            "cn": {"font": dict(family="Roboto", color="black", size=12)},
+        }
+
+        labels = {
+            "en": {
+                "metric": "Metric",
+                "value": "Value",
+                "cagr": "CAGR",
+                "vol": "Volatility (Ann.)",
+                "sharpe": "Sharpe Ratio",
+                "sortino": "Sortino Ratio",
+                "mdd": "Max Drawdown",
+                "beta": f'Beta to {benchmark_fund}',
+                "corr": "Correlation (vs. Benchmark)",
+                "win": "Win Rate (Monthly)",
+                "best": "Best Month",
+                "worst": "Worst Month",
+                "aum": "AUM",
+                "skew": "Skewness",
+                "kurt": "Kurtosis",
+                "turnover": "Avg. Monthly Turnover",
+            },
+            "cn": {
+                "metric": "指标",
+                "value": "数值",
+                "cagr": "年复合增长率 (CAGR)",
+                "vol": "波动率（年化）",
+                "sharpe": "夏普比率",
+                "sortino": "索提诺比率",
+                "mdd": "最大回撤",
+                "beta": f"贝塔({benchmark_fund})",
+                "corr": "相关性（基准）",
+                "win": "月度胜率",
+                "best": "最佳月份",
+                "worst": "最差月份",
+                "aum": "管理资产规模（AUM）",
+                "skew": "偏度",
+                "kurt": "峰度",
+                "turnover": "平均月换手率",
+            },
+        }
+        L = labels["en"] if language not in labels else labels[language]
+
+        placeholder_values = {
+            "cagr": self.annualized_return(self.inception_date, end_month), 
+            "vol": self.volatility(self.inception_date, end_month), 
+            "sharpe": self.sharpe_ratio(self.inception_date,end_month), 
+            "sortino":  self.sortino_ratio(self.inception_date,end_month),
+            "mdd": self.max_drawdown(self.inception_date, end_month), 
+            "beta": self.beta_to(benchmark_fund, self.inception_date, end_month), 
+            "corr": "0.28", 
+            "win": "58%",
+            "best": "[placeholder]", 
+            "worst":"[placeholder]", 
+            "aum": "[placeholder]", 
+            "skew": "[placeholder]",
+            "kurt": "[placeholder]", 
+            "turnover": "[placeholder]",
+        }
+
+        default_order = ["cagr","vol","sharpe","sortino","mdd","beta","corr",
+                        "win","best","worst","aum","skew","kurt","turnover"]
+
+        if metrics is None:
+            selected = default_order
+        else:
+            known = set(placeholder_values.keys())
+            selected = [m for m in metrics if m in known]
+            if not selected:
+                raise ValueError("No valid metrics provided.")
+
+        metric_labels = [L[k] for k in selected]
+        metric_values = [placeholder_values[k] for k in selected]
+
+        px_per_char = 7.5
+
+        if not horizontal:
+            metric_width = max(120, int(px_per_char * max(len(s) for s in metric_labels)) + 20)
+            value_width  = max(100, int(px_per_char * max(len(s) for s in metric_values)) + 20)
+            n_rows = len(metric_labels)
+            base_cell_h, base_header_h = 28, 32
+            if n_rows > 12:
+                scale = 12 / n_rows
+                base_cell_h = max(16, int(base_cell_h * scale))
+                base_header_h = max(18, int(base_header_h * scale))
+            ratio_num, ratio_den = 10, 26
+            min_col_width = min(metric_width, value_width)
+            max_h = int(min_col_width * ratio_num / ratio_den)
+            cell_h = max(14, min(base_cell_h, max_h))
+            header_h = max(16, min(base_header_h, max_h))
+
+            fig = go.Figure(data=[go.Table(
+                columnwidth=[metric_width, value_width],
+                header=dict(values=[L["metric"], L["value"]],
+                            fill_color=header_fill, align="left",
+                            font=settings[language]["font"], height=header_h),
+                cells=dict(values=[metric_labels, metric_values],
+                        fill_color=cell_fill, align="left",
+                        font=settings[language]["font"], height=cell_h),
+            )])
+        else:
+            # --- FIXED: one list per column (each with a single value) ---
+            col_widths = []
+            for lab, val in zip(metric_labels, metric_values):
+                w = max(len(lab), len(val))
+                col_widths.append(max(90, int(px_per_char * w) + 16))
+
+            header_h, cell_h = 36, 32
+
+            fig = go.Figure(data=[go.Table(
+                columnwidth=col_widths,
+                header=dict(
+                    values=metric_labels,
+                    fill_color=header_fill,
+                    align=["center"] * len(metric_labels),
+                    font=settings[language]["font"],
+                    height=header_h,
+                ),
+                cells=dict(
+                    # one column per metric, each column has a single row (the value)
+                    values=[[v] for v in metric_values],
+                    fill_color=cell_fill,
+                    align=["center"] * len(metric_values),
+                    font=settings[language]["font"],
+                    height=cell_h,
+                ),
+            )])
+
+        fig.update_layout(
+            margin=dict(l=20, r=20, t=20, b=20),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
         fig.show()
         return fig

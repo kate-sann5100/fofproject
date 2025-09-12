@@ -19,7 +19,8 @@ for name, fund in funds_to_be_plot.items():
     )
 
 # funds['RDGFF'].plot_monthly_return_distribution()
-# funds["RDGFF"].export_monthly_table()
+# funds["LEXINGTON"].export_monthly_table(language ="cn")
+funds['HAO'].export_key_metrics_table(language ="cn", end_month=end_month, benchmark_fund = funds["MSCI CHINA"], metrics = ["vol","sharpe","sortino","mdd","beta"],horizontal = False)
 # Correlation heatmap
 # fig, corr_df, overlap_df = plot_fund_correlation_heatmap(funds_to_be_plot, method="pearson", min_overlap=12)
 # fig.show()
