@@ -12,10 +12,10 @@ start_month = "2000-1"
 end_month = "2025-7"
 
 # funds['RDGFF'].plot_monthly_return_distribution()
-# funds["HAO"].export_monthly_table(language ="en", 
-#                                   benchmark = funds["MSCI CHINA"],
-#                                   benchmark_name = "MSCI"
-#                                   )
+funds["HAO"].export_monthly_table(language ="en", 
+                                  benchmark = funds["MSCI CHINA"],
+                                  benchmark_name = "MSCI"
+                                  )
 # funds["HAO"].export_key_metrics_table(
 #     language ="en", 
 #     end_month=end_month, 
@@ -24,7 +24,7 @@ end_month = "2025-7"
 #     horizontal = False,
 #     fix_aspect = True
 # )
-funds['HAO'].summary_of_a_fund(funds['MSCI CHINA'],language="en")
+# funds['HAO'].summary_of_a_fund(funds['MSCI CHINA'],language="en")
 
 
 # for name, fund in funds_to_be_plot.items():
