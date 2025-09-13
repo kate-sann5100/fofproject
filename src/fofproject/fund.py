@@ -1,3 +1,4 @@
+from __future__ import annotations
 from datetime import datetime
 from typing import List, Dict, Union
 import plotly.graph_objects as go
@@ -5,6 +6,49 @@ import pandas as pd
 import math
 import numpy as np
 from fofproject.utils import parse_month, list_of_dicts_to_df, hex_to_rgba
+import matplotlib.pyplot as plt
+from pyfonts import load_google_font
+from matplotlib.font_manager import FontProperties
+from pathlib import Path
+
+current_dir = Path(__file__).parent
+save_dir = current_dir.parent.parent / "output"
+if not save_dir.exists():
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+def get_font2height():
+    font2height = {}
+    for font_size in range(1, 40):
+        fig, ax = plt.subplots()
+        text = ax.text(0, 0, "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ", fontsize=font_size, fontname="Arial")
+        # Draw the figure to ensure renderer is available
+        fig.canvas.draw()
+        fig.set_dpi(200)  # Set a specific DPI for consistency
+        # Get the bounding box in display (pixel) coordinates
+        bbox = text.get_window_extent(renderer=fig.canvas.get_renderer())
+        height_in_inches = bbox.height / fig.dpi
+        font2height[font_size] = height_in_inches
+    return font2height
+
+FONT2HEIGHT = get_font2height()
+
+FONT_FNAME = {
+    "en": {
+        "bold": "src/fofproject/font/Roboto/static/Roboto-Bold.ttf",
+        "regular": 'src/fofproject/font/Roboto/static/Roboto-Regular.ttf',
+    },
+    "cn": {
+        "bold": 'src/fofproject/font/Roboto/static/Roboto-Bold.ttf',
+        "regular": 'src/fofproject/font/Roboto/static/Roboto-Regular.ttf',
+    }
+}
+
+def find_largest_font_size(target_height, font2height):
+    """Find the largest font size that fits within the target height."""
+    for font_size, height in reversed(font2height.items()):
+        if height <= target_height:
+            return font_size
+    return None
 
 def input_monthly_returns(file_path, performance_fee = 0.2, management_fee = 0.01):
     """Read monthly returns from a CSV file and create Fund instances."""
@@ -717,19 +761,16 @@ class Fund:
             borderwidth=1
         )
 
-        fig.show()
+        file_name = f'{self.name} monthly return distribution plot {sm.strftime("%Y-%m-%d")} to {em.strftime("%Y-%m-%d")}.png'
+        save_path = f'{save_dir}/{file_name}'
+        fig.write_image(save_path, scale=2)
         return fig
 
-    def export_monthly_table(self, language="en"):
+    def export_monthly_table(self, language: str="en", benchmark: Fund=None, benchmark_name: str=None):
         """
         Export a Plotly table of monthly + YTD returns to an interactive HTML file.
         """
-        df = pd.DataFrame(self.monthly_returns)
-        date_col = "month" if "month" in df.columns else "datetime"
-        df["date"] = pd.to_datetime(df[date_col])
-        df["year"] = df["date"].dt.year
-        df["month_num"] = df["date"].dt.month
-
+        # ---------------- configurations ----------------
         month_labels = {"en":["Jan","Feb","Mar","Apr","May","Jun",
                         "Jul","Aug","Sep","Oct","Nov","Dec"],
                         "cn": ["1月","2月","3月","4月","5月","6月",
@@ -744,14 +785,7 @@ class Fund:
                         'year': "年分",
                     }
                 }
-        settings = {
-                "en": {
-                    'font': dict(family="Roboto", color="black", size=12),
-                },
-                "cn": {
-                    'font': dict(family="Roboto", color="black", size=12),  
-                }
-            }
+        
 
         if language == "en":
             table_labels = month_labels['en']
@@ -761,101 +795,133 @@ class Fund:
             table_labels = month_labels['cn']
             ytd_label = other_labels['cn']['ytd_label']
             year_label = other_labels['cn']['year']
-
-        pivot = (
-            df.pivot_table(index="year", columns="month_num", values="value", aggfunc="last")
-              .reindex(columns=range(1, 13))
-              .sort_index(ascending=False)
-        )
-        ytd = (pivot.add(1).prod(axis=1, skipna=True) - 1)
-        pivot["YTD"] = ytd
-
-        # format values
-        def pct_str(x):
-            return f"{x*100:,.2f}%" if pd.notna(x) else ""
-
-        display_cols = table_labels + [ytd_label]
-        pivot.columns = table_labels + [ytd_label]
-        pivot = pivot[display_cols]
-        pivot_str = pivot.applymap(pct_str)
-        pivot_str.insert(0, year_label, pivot_str.index.astype(str))
-        header_values = [year_label] + display_cols
-        # ---------------
-        num_rows = pivot_str.shape[0]
-        num_cols = len(header_values)  # 14 (Year + 12 months + YTD)    
-        
-        px_per_char = 7.5
-        month_label_width = max(52, int(px_per_char * max(len(lbl) for lbl in display_cols)))
-        year_col_width   = max(64, int(px_per_char * len(year_label) + 10))
-
-        # Optional: if values are long (e.g., many digits), widen month cells slightly
-        # Look at a sample of formatted values to estimate content length
-        try:
-            sample_vals = pd.Series(
-                [v for col in display_cols for v in pivot_str[col].head(5)]
+        # ---------------- prepare data ----------------
+        df = self.monthly_returns
+        # processed_returns = []
+        # for entry in monthly_returns:
+        #     raw_date = entry['date']
+        #     # Try parsing date in 'DD/MM/YYYY' format
+        #     dt = datetime.strptime(str(raw_date), '%d/%m/%Y')
+        #     processed_returns.append({d
+        #         'datetime': dt, 
+        #         'month': datetime(dt.year, dt.month, 1), 
+        #         'value': entry['value']
+        #     })
+        monthly_returns_list = [self.monthly_returns, benchmark.monthly_returns] if benchmark else [self.monthly_returns]
+        df_list = []
+        for monthly_returns in monthly_returns_list:
+            # rechieve monthly returns
+            df = pd.DataFrame(monthly_returns)
+            # add year and month_num columns
+            df["year"] = df["month"].dt.year
+            df["month_num"] = df["month"].dt.month
+            # pivot table have years as rows and months as columns
+            df = (
+                df.pivot_table(index="year", columns="month_num", values="value", aggfunc="last")
+                .reindex(columns=range(1, 13))
+                .sort_index(ascending=False)
             )
-            max_val_chars = min(12, max((len(s) for s in sample_vals if isinstance(s, str)), default=6))
-            month_label_width = max(month_label_width, int(px_per_char * max_val_chars) + 20)
-        except Exception:
-            pass
+            # calculate YTD
+            ytd = (df.add(1).prod(axis=1, skipna=True) - 1)
+            df["YTD"] = ytd
+            def pct_str(x):
+                """Format a float as a percentage string."""
+                return f"{x*100:,.2f}%" if pd.notna(x) else ""
+            df = df.applymap(pct_str)
+            # append to list
+            df_list.append(df)
+        if len(df_list) == 2:
+            rows = []
+            for year in df_list[0].index:
+                row_value = df_list[0].loc[year].tolist()
+                row_benchmark = df_list[1].loc[year].tolist()
+                row_benchmark = [
+                    b if v else ""
+                    for v, b in zip(row_value, row_benchmark)
+                ]
+                rows.append([year] + row_value)
+                rows.append([benchmark_name] + row_benchmark)
+            df = pd.DataFrame(
+                rows, 
+                columns=['year'] + df_list[0].columns.to_list()
+            )
+            df.columns = [year_label] +table_labels + [ytd_label]
+        else:
+            df = df_list[0]
+            df.columns = table_labels + [ytd_label]
+            df.insert(0, year_label, df.index.astype(str))
 
-        # Compose column widths: first (year) + uniform month/YTD widths
-        columnwidths = [year_col_width] + [month_label_width] * (num_cols - 1)
-
-        # Base heights (px). With more rows, reduce height so tables don't get huge.
-        base_cell_height = 28
-        base_header_height = 30
-        if num_rows > 10:
-            # Scale down height roughly inversely with row count (cap at 14px)
-            scale = 10 / num_rows
-            base_cell_height = max(14, int(base_cell_height * scale))
-            base_header_height = max(16, int(base_header_height * scale))
-
-        # Enforce height:width ratio <= 10:26 (≈0.3846) using the NARROWEST column
-        ratio_num, ratio_den = 10, 26
-        min_col_width = min(columnwidths)
-        max_allowed_height = int(min_col_width * ratio_num / ratio_den)
-
-        cells_height = min(base_cell_height, max_allowed_height)
-        header_height = min(base_header_height, max_allowed_height)
-
-        # Safety: ensure at least 12px for legibility
-        cells_height = max(12, cells_height)
-        header_height = max(14, header_height)
-
-        # ----------------------
-
-        fig = go.Figure(
-            data=[go.Table(
-                columnwidth=[50] + [55]*13,
-                header=dict(values=header_values,
-                            fill_color="#cbb69d",
-                            align="center",
-                            font=settings[language]['font'],
-                            height=30),
-                cells=dict(values=[pivot_str[col].tolist() for col in pivot_str.columns],
-                           fill_color="#f0f0f0",
-                           font=settings[language]['font'],
-                           align="center",
-                           height=28)
-            )]
+        # ---------------- figure size calculations ----------------
+        width = 26
+        min_height, max_height = 3, 10
+        num_rows, num_cols = df.shape  # 14 (Year + 12 months + YTD)
+        # width
+        cell_width = width / num_cols
+        # default cell height
+        cell_height = 1
+        # calculate table height using the default cell height
+        height = cell_height * (num_rows + 1)  
+        # adjust cell height if the table is too tall or too short
+        if height < min_height:
+            cell_height = min_height / (num_rows + 1)
+        elif height > max_height:
+            cell_height = max_height / (num_rows + 1)
+        # identify text font size that fits in the cell height
+        font_size = find_largest_font_size(cell_height * 0.8, FONT2HEIGHT)
+        # recalculate final height
+        height = cell_height * (num_rows + 1)
+        # ----------------draw table ----------------
+        # initialize figure
+        fig, ax = plt.subplots(figsize=(width, height))
+        ax.axis('off')  # Hide axes
+        # create table
+        table = ax.table(
+            cellText=df.values,
+            colLabels=df.columns,
+            cellLoc='center',   # Center align text in cells
+            loc='center'
         )
-        fig.update_layout(
-            margin=dict(l=20, r=20, t=20, b=20),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
-        )
-        fig.show()
-        return fig
-            
-    def export_key_metrics_table(self, end_month, benchmark_fund=None, language="en", metrics=None, horizontal: bool = False, fix_aspect: bool = False):
+        # style table
+        for (row, col), cell in table.get_celld().items():
+            if row == 0:
+                # use bold font for header row
+                fname = FONT_FNAME[language]['bold']
+                cell.set_facecolor('#cbb69d')
+            else:
+                # use bold font for value rows if applicable
+                fname = FONT_FNAME[language]['bold'] if benchmark and row % 2 == 1 else FONT_FNAME[language]['regular']
+                cell.set_facecolor('#f0f0f0')
+            cell.set_width(cell_width / width - 1e-9)
+            cell.set_height(cell_height / height - 1e-9)
+            cell.set_edgecolor('white')
+            font_prop = FontProperties(
+                fname=fname,
+                size=font_size
+            )
+            cell.get_text().set_fontproperties(font_prop)
 
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        plt.margins(0)
+        plt.axis('off')
+        plt.tight_layout()
+        file_name = f'{self.name} monthly return table {self.latest_date.strftime("%Y-%m-%d")}' + (benchmark.name if benchmark else '') + '.png'
+        # file_name = self.name + ' key metrics table ' + self.latest_date + benchmark.name if benchmark else '' + '.png'
+        save_path = f'{save_dir}/{file_name}'
+        plt.savefig(save_path, bbox_inches='tight', pad_inches=0, dpi=200)
+       
+    def export_key_metrics_table(
+        self,
+        end_month,
+        benchmark_fund=None,
+        language="en",
+        metrics=None,
+        horizontal: bool = False,
+        fix_aspect: bool = False,
+        filename="key_metrics_table.png"
+    ):
         header_fill = "#cbb69d"
         cell_fill = "#f0f0f0"
-        settings = {
-            "en": {"font": dict(family="Roboto", color="black", size=12)},
-            "cn": {"font": dict(family="Roboto", color="black", size=12)},
-        }
+        text_color = "black"
 
         labels = {
             "en": {
@@ -867,7 +933,7 @@ class Fund:
                 "sortino": "Sortino Ratio",
                 "cum": "Cumulative Return",
                 "mdd": "Max Drawdown",
-                "beta": f'Beta to {benchmark_fund.name}',
+                "beta": f"Beta to {benchmark_fund.name}",
                 "corr": f"Correlation (vs. {benchmark_fund.name})",
                 "win": "Win Rate (Monthly)",
                 "best": "Best Month",
@@ -884,7 +950,7 @@ class Fund:
                 "vol": "波动率",
                 "sharpe": "夏普比率",
                 "sortino": "索提诺比率",
-                "cum": "累計增长率",
+                "cum": "累计增长率",
                 "mdd": "最大回撤",
                 "beta": f"贝塔({benchmark_fund.name})",
                 "corr": f"相关性（{benchmark_fund.name}）",
@@ -897,27 +963,23 @@ class Fund:
                 "turnover": "平均月换手率",
             },
         }
-        L = labels["en"] if language not in labels else labels[language]
+        L = labels.get(language, labels["en"])
 
         placeholder_values = {
-            # Percentages
             "cagr": f"{100 * self.annualized_return(self.inception_date, end_month):.1f}%",
             "vol": f"{100 * self.volatility(self.inception_date, end_month):.1f}%",
             "mdd": f"{100 * self.max_drawdown(self.inception_date, end_month):.1f}%",
             "cum": f"{100 * self.cumulative_return(self.inception_date, end_month):.1f}%",
-            "win": f"{100 * self.positive_months(self.inception_date, end_month):.1f}%",
-            
-            # Ratios
+            "win": f"{self.positive_months(self.inception_date, end_month)*100:.2f}%",
             "sharpe": f"{self.sharpe_ratio(self.inception_date, end_month):.2f}",
             "sortino": f"{self.sortino_ratio(self.inception_date, end_month):.2f}",
             "beta": f"{self.beta_to(benchmark_fund, self.inception_date, end_month):.2f}",
             "corr": f"{self.correlation_to(benchmark_fund, self.inception_date, end_month):.2f}",
-            "win": f"{self.positive_months(self.inception_date, end_month)*100:.2f}%",
-            "best": "[placeholder]", 
-            "worst":"[placeholder]", 
-            "aum": "[placeholder]", 
+            "best": "[placeholder]",
+            "worst": "[placeholder]",
+            "aum": "[placeholder]",
             "skew": "[placeholder]",
-            "kurt": "[placeholder]", 
+            "kurt": "[placeholder]",
             "turnover": "[placeholder]",
         }
 
@@ -934,85 +996,77 @@ class Fund:
 
         metric_labels = [L[k] for k in selected]
         metric_values = [placeholder_values[k] for k in selected]
-
-        px_per_char = 7.5
-
-        metric_width = max(120, int(px_per_char * max(len(str(s)) for s in metric_labels)) + 20)
-        value_width  = max(100, int(px_per_char * max(len(str(s)) for s in metric_values)) + 20)
-        n_rows = len(metric_labels)
-        base_cell_h, base_header_h = 28, 32
-        if n_rows > 12:
-            scale = 12 / n_rows
-            base_cell_h = max(16, int(base_cell_h * scale))
-            base_header_h = max(18, int(base_header_h * scale))
-        ratio_num, ratio_den = 10, 26
-        min_col_width = min(metric_width, value_width)
-        max_h = int(min_col_width * ratio_num / ratio_den)
-        cell_h = max(14, min(base_cell_h, max_h))
-        header_h = max(16, min(base_header_h, max_h))
-
+        font_size = 30
+        font_width = FONT2HEIGHT[font_size]
+        font_height = FONT2HEIGHT[font_size]
 
         if not horizontal:
-            fig = go.Figure(data=[go.Table(
-                columnwidth=[metric_width, value_width],
-                header=dict(values=[L["metric"], L["value"]],
-                            fill_color=header_fill, align="left",
-                            font=settings[language]["font"], height=header_h),
-                cells=dict(values=[metric_labels, metric_values],
-                        fill_color=cell_fill, align="left",
-                        font=settings[language]["font"], height=cell_h),
-            )])
-            total_table_width = metric_width + value_width
-            n_rows_rendered = n_rows + 1  # header + rows
+            # Vertical table: two columns (Metric | Value)
+            cell_text = list(zip(metric_labels, metric_values))
+            col_labels = [L["metric"], L["value"]]
+            col_widths = [
+                font_width * max([len(row[i]) for row in cell_text]) * 1.2
+                for i in range(2)
+            ]
+            header_height = font_height * 2.5 * 1.2
+            cell_height = font_height * 2.5
+            table_width = sum(col_widths)
+            table_height = header_height + cell_height * len(cell_text)
+            
         else:
-            # --- FIXED: one list per column (each with a single value) ---
-            col_widths = []
-            for lab, val in zip(metric_labels, metric_values):
-                w = max(len(lab), len(val))
-                col_widths.append(max(90, int(px_per_char * w) + 16))
-            total_table_width = sum(col_widths)
-            n_rows_rendered = 2  # header + one value row
+            # Horizontal table: one row of metrics, one row of values
+            cell_text = [metric_values]
+            col_labels = metric_labels
+            col_widths = [
+                font_width * max(len(lab), len(val)) * 1.2
+                for lab, val in zip(metric_labels, metric_values)
+            ]
+            table_width = sum(col_widths)
+            if fix_aspect:
+                table_height = table_width / 14
+                header_height = table_height / 2.2 * 1.2
+                cell_height = table_height / 2.2
+            else:
+                header_height = font_height * 2.5 * 1.2
+                cell_height = font_height * 2.5
+                table_height = header_height + cell_height
 
-            fig = go.Figure(data=[go.Table(
-                columnwidth=col_widths,
-                header=dict(
-                    values=metric_labels,
-                    # bold=True,
-                    fill_color=header_fill,
-                    align=["center"] * len(metric_labels),
-                    font=settings[language]["font"],
-                    height=header_h,
-                ),
-                cells=dict(
-                    # one column per metric, each column has a single row (the value)
-                    values=[[v] for v in metric_values],
-                    fill_color=cell_fill,
-                    align=["center"] * len(metric_values),
-                    font=settings[language]["font"],
-                    height=cell_h,
-                ),
-            )])
+        # Create figure sized to fit table
+        fig, ax = plt.subplots(figsize=(table_width, table_height))
+        ax.axis("off")
 
-        margins = dict(l=20, r=20, t=20, b=20)
-        fig.update_layout(
-            margin=margins,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+        table = ax.table(
+            cellText=cell_text,
+            colLabels=col_labels,
+            loc="center",
+            cellLoc="center",
         )
-        if fix_aspect:
-        # Height:Width = aspect_ratio (H:W)
-            ar_h, ar_w = (10, 50)
-            # Derive canvas width from table width plus margins
-            canvas_width = int(total_table_width + margins["l"] + margins["r"])
-            canvas_height = int(canvas_width * (ar_h / ar_w))
-            fig.update_layout(width=canvas_width, height=canvas_height)
-        else:
-            # Let Plotly auto-size width; set a sensible height from row count
-            auto_height = int(margins["t"] + margins["b"] + header_h + cell_h * (n_rows_rendered - 1) + 8)
-            fig.update_layout(height=auto_height)
 
-        fig.show()
-        return fig
+        # Style cells
+        for (row, col), cell in table.get_celld().items():
+            if row == 0:  # header
+                cell.set_facecolor(header_fill)
+                cell.set_text_props(color=text_color, weight="bold")
+                cell.set_height(header_height / table_height - 1e-9)
+                cell.set_width(col_widths[col] / table_width - 1e-9)
+            else:  # data rows
+                cell.set_facecolor(cell_fill)
+                cell.set_text_props(color=text_color)
+                cell.set_height(cell_height / table_height - 1e-9)
+                cell.set_width(col_widths[col] / table_width - 1e-9)
+            font_prop = FontProperties(
+                fname=FONT_FNAME[language]['bold'] if row == 0 else FONT_FNAME[language]['regular'],
+                size=font_size
+            )
+            cell.get_text().set_fontproperties(font_prop)
+            cell.set_edgecolor('white')
+
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        plt.margins(0)
+        plt.axis('off')
+        plt.tight_layout()
+        save_path = f'{save_dir}/{self.name} key metrics table {end_month.strftime("%Y-%m-%d")}.png'
+        plt.savefig(save_path, bbox_inches='tight', pad_inches=0, dpi=200)
 
     def summary_of_a_fund(self, benchmark_fund=None, language="en"):
         plot1 = self.export_monthly_table(language)

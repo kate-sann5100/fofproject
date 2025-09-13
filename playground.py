@@ -12,7 +12,18 @@ start_month = "2000-1"
 end_month = "2025-7"
 
 # funds['RDGFF'].plot_monthly_return_distribution()
-# funds["LEXINGTON"].export_monthly_table(language ="cn")
+# funds["HAO"].export_monthly_table(language ="en", 
+#                                   benchmark = funds["MSCI CHINA"],
+#                                   benchmark_name = "MSCI"
+#                                   )
+# funds["HAO"].export_key_metrics_table(
+#     language ="en", 
+#     end_month=end_month, 
+#     benchmark_fund = funds["MSCI CHINA"], 
+#     metrics = ["cagr","vol","sharpe","sortino","beta"],
+#     horizontal = False,
+#     fix_aspect = True
+# )
 funds['HAO'].summary_of_a_fund(funds['MSCI CHINA'],language="en")
 
 
