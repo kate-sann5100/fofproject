@@ -8,22 +8,12 @@ from src.fofproject.mvo import minimum_variance_analysis
 funds = input_monthly_returns(r"RETURN DATA.csv", performance_fee=0.2, management_fee=0.01)
 # funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA'])
 funds_to_be_plot = subset_of_funds(funds, ['RDGFF', 'EUREKAHEDGE','MSCI CHINA', 'HAO','TAIREN', 'LEXINGTON', 'LIM','FOREST'])
-start_month = "2000-1"
-end_month = "2025-7"
+start_month = "2019-12"
+end_month = "2020-7"
 
 # funds['RDGFF'].plot_monthly_return_distribution()
-funds["HAO"].export_monthly_table(language ="en", 
-                                  benchmark = funds["MSCI CHINA"],
-                                  benchmark_name = "MSCI"
-                                  )
-# funds["HAO"].export_key_metrics_table(
-#     language ="en", 
-#     end_month=end_month, 
-#     benchmark_fund = funds["MSCI CHINA"], 
-#     metrics = ["cagr","vol","sharpe","sortino","beta"],
-#     horizontal = False,
-#     fix_aspect = True
-# )
+
+# funds["LEXINGTON"].export_monthly_table(language ="cn")
 # funds['HAO'].summary_of_a_fund(funds['MSCI CHINA'],language="en")
 
 
@@ -67,16 +57,17 @@ funds["HAO"].export_monthly_table(language ="en",
 
             # print(f"Generating cumulative return plot for {', '.join(names)} in {years_to_plot}...")
 
-    # plot = plot_cumulative_returns(
-    #     funds=subset_of_funds(funds, names),   # subset based on this group
-    #     title=f"Performance Since Inception",
-    #     start_month=start_month,
-    #     end_month=end_month,
-    #     style="excel",
-    #     language="en",
-    #     blur=True,
-    #     aspect_lock=True
-    #     )
+plot = plot_cumulative_returns(
+    funds=subset_of_funds(funds, ['RDGFF', 'MSCI WORLD', 'MSCI CHINA']),   # subset based on this group
+    title="",
+    start_month=start_month,
+    end_month=end_month,
+    style="default",
+    language="en",
+    blur=True,
+    aspect_lock=False,
+    custom_ticks=False
+    )
 
 
 
