@@ -52,42 +52,43 @@ STYLE_DICT = {
                 "t": 70,  # top margin
                 "b": 110  # bottom margin   
             },
-            "grid_color": "#E9E9E9",
+            "grid_color": "#DDDDDE",
+            "zero_color" :"#989A9C",
             "date_ticks": {
                 "num": 6, # Number of date ticks to display
-                "format": "%b %Y" # Format for date ticks
+                "format": "%b" # Format for date ticks
             },
             "annotation": {
                 "add_annotation": True, # True if we want to add an annotation
                 "position": {
                     "x": 0.5, # scale to the entire plot area
-                    "y": -0.15 # scale to the entire plot area
+                    "y": -0.18 # scale to the entire plot area
                 }
             },
             "legend": {
-                "orientation": "v", # "h" for horizontal, "v" for vertical
+                "orientation": "h", # "h" for horizontal, "v" for vertical
                 "position": {
-                    "x": 0.0, # scale to the entire plot area
-                    "y": -0.1 # scale to the entire plot area
+                    "x": 0.5, # scale to the entire plot area
+                    "y": -0.07 # scale to the entire plot area
                 }
             },
         },
         "trace_config": {
             "mark_size": {
-                "lead": 12, # marker size for the lead fund
-                "other": 8 # marker size for the other funds
+                "lead": 18, # marker size for the lead fund
+                "other": 16 # marker size for the other funds
             },
             "line_width": {
-                "lead": 3, # line width for the lead fund
-                "other": 2 # line width for the other funds
+                "lead": 5, # line width for the lead fund
+                "other": 4 # line width for the other funds
             },
             "color": {
                 "lead": "#2F2F2F",
                 "other": [
-                    "#8FC0A9",  # light teal green
-                    "#A8DADC",  # pale warm taup
-                    "#9A8C98",  # off-white with warmth
-                    "#E07A5F",  # light stone grey
+                    "#53565A",  # light stone grey
+                    "#DACEBF",  # light teal green
+                    "#C1AE94",  # pale warm taup
+                    "#989A9C",  # off-white with warmth
                     "#81B29A",  # pale oat
                 ]
             },
@@ -131,9 +132,10 @@ STYLE_DICT = {
                 "plot": "#fcfcfd"
             },
             "grid_color": "#efefef",
+            "zero_color" :"#53565A",
             "date_ticks": {
                 "num": 8,
-                "format": "%b ’%y"
+                "format": "%b"
             },
             "annotation": {
             "add_annotation": False,
@@ -211,6 +213,7 @@ STYLE_DICT = {
                 "b": 110  # bottom margin   
             },
             "grid_color": "#DACEBF",
+            "zero_color" :"#53565A",
             "date_ticks": {
                 "num": 6, # Number of date ticks to display
                 "format": "%b %Y" # Format for date ticks
@@ -301,11 +304,12 @@ def plot_cumulative_returns(
         style: str = "default",
         language: str = "en",  # "en" or "cn"
         blur: bool = False,
-        aspect_lock = False
+        aspect_lock = False,
+        custom_ticks = False
     ):
 
 
-
+    global_ymin, global_ymax = (0, 0) if custom_ticks else ("","")
     layout_config = STYLE_DICT.get(style, STYLE_DICT["default"])["layout_config"]
     trace_config = STYLE_DICT.get(style, STYLE_DICT["default"])["trace_config"]
 
@@ -384,6 +388,15 @@ def plot_cumulative_returns(
         else:
             name = fund_name_map.get(fund.name, {}).get(language, fund.name)
 
+        if custom_ticks:
+            ymin = np.min(cumulative_returns)
+            ymax = np.max(cumulative_returns)
+            global_ymax = max(ymax, global_ymax)
+            global_ymin = min(ymin, global_ymin)
+            # Round down the lower bound, up the upper bound to nearest 10%
+            ymin_rounded = np.floor(global_ymin * 10) / 10
+            ymax_rounded = np.ceil(global_ymax * 10) / 10
+
         # Add trace for the fund
         fig.add_trace(
             go.Scatter(
@@ -413,7 +426,7 @@ def plot_cumulative_returns(
 
         step = max(1, int(len(months) / 12))
         marker_indices = list(range(0, len(months), step))
-        box_indices = list(range(0, len(months), step * 2))
+        box_indices = list(range(0, len(months), step))
 
         # Add markers for every ~10% of the data points
         if STYLE_DICT.get(style, STYLE_DICT["default"]).get("markers", {}).get("enabled", False):
@@ -433,9 +446,33 @@ def plot_cumulative_returns(
                         size=trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"],
                         color=color_map[fund.name],
                         line=dict(width=1, color="white")
+                    )
                 )
             )
-        )
+            first_last_x = [months[marker_indices[0]], months[marker_indices[-1]]]
+            first_last_y = [cumulative_returns[marker_indices[0]], cumulative_returns[marker_indices[-1]]]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=first_last_x,
+                    y=first_last_y,
+                    mode="markers",
+                    showlegend=False,
+                    hoverinfo="skip",
+                    marker=dict(
+                        size=(trace_config["mark_size"]["lead"] if fund.name == lead_name else trace_config["mark_size"]["other"]) + 4,
+                        color=color_map[fund.name],  # hollow center
+                        line=dict(width=2, color=color_map[fund.name]),  # outline in series color
+                        symbol="circle-open"  # hollow circle marker
+                    )
+                )
+            )
+
+
+
+
+            # Compute a dynamic dtick as 10% of the range
+
         # Add value boxes based on whether the trace is a lead or not / some style do not need value boxes
         value_box_cfg = STYLE_DICT.get(style, STYLE_DICT["default"]).get("value_boxes", {})
         if value_box_cfg.get("enabled", False):
@@ -477,6 +514,7 @@ def plot_cumulative_returns(
                     )
 
                     value_box_tiers[ix] += 1
+
     # --------------------------- Set Layout ---------------------------
 
     fig.update_layout(
@@ -501,7 +539,16 @@ def plot_cumulative_returns(
                 for i in box_indices
             ],
         ),
-        yaxis=dict(title="Cumulative Return (%)" if trace_config['Y-axis'] is True else None, tickformat=".0%", zeroline=True),
+        yaxis=dict(
+            title="Cumulative Return (%)" if trace_config['Y-axis'] is True else None, 
+            tickformat=".0%", 
+            showgrid=True,
+            gridcolor=layout_config["grid_color"],
+            zeroline=True,
+            zerolinecolor = layout_config["zero_color"],
+            zerolinewidth = 2,
+            rangemode = "tozero"
+            ),
         legend=dict(
             orientation=layout_config["legend"]["orientation"],
             yanchor="middle",
@@ -511,6 +558,15 @@ def plot_cumulative_returns(
         ),
         hovermode="x unified",
     )
+    # Set up the y-axis to be 1/10 of the max and min of the range
+    if custom_ticks:
+        custom_ticks = 1/custom_ticks
+        dtick = custom_ticks * (ymax_rounded - ymin_rounded)
+        fig.update_yaxes(
+            dtick = dtick,
+            range=[ymin_rounded, ymax_rounded]
+        )
+
     if aspect_lock == True:
         ASPECT_W, ASPECT_H = 13.5, 6
         WIDTH = 1280
